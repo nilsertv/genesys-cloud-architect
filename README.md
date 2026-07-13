@@ -8,10 +8,10 @@ Create, debug and test Genesys Cloud Architect Flows using Claude Code.
 
 ```
 # Add the marketplace
-/plugin marketplace add MakingChatbots/genesys-cloud-architect
+/plugin marketplace add nilsertv/genesys-cloud-architect
 
 # Install the plugin
-/plugin install genesys-cloud-architect@makingchatbots
+/plugin install genesys-cloud-architect@nilsertv-genesys-cloud-architect
 ```
 
 ## Configuration

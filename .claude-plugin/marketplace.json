@@ -1,10 +1,10 @@
 {
-  "name": "makingchatbots-genesys-cloud-architect",
+  "name": "nilsertv-genesys-cloud-architect",
   "owner": {
-    "name": "Lucas Woodward",
-    "url": "https://makingchatbots.com/"
+    "name": "nilsertv",
+    "url": "https://github.com/nilsertv"
   },
-  "description": "Plugins for the full life-cycle of creating Genesys Cloud Architect flows with Claude Code",
+  "description": "Fork of genesys-cloud-architect with per-project credential isolation. Plugins for the full life-cycle of creating Genesys Cloud Architect flows with Claude Code",
   "plugins": [
     {
       "name": "genesys-cloud-architect",
