@@ -1,0 +1,74 @@
+schema: spec-driven
+
+context: |
+  Genesys Cloud Architect: Claude Code plugin (Node.js/TS, pnpm workspace).
+  MCP server (src/mcp-server -> servers/*.js, 3 tools) + standalone
+  deploy-runner (src/deploy-runner -> bin/deploy-runner.js) using the
+  Architect Scripting SDK, plus 2 skills (flow-diagram, write-flow).
+  Build: esbuild (CJS/node22). Lint/format: Biome 2.4.15 (src/** only).
+  Validation: zod v4 (via zod/v3 compat imports). Types: tsc strict,
+  noEmit, NOT wired into CI/pre-commit (config-only, unenforced today).
+  Testing: NO test runner installed, NO test script, zero automated
+  tests. CI = lint + build + MCP boot/smoke test only. Bundles
+  (bin/deploy-runner.js, servers/*.js) are committed and rebuilt +
+  re-staged by husky pre-commit on every commit.
+
+testing:
+  strict_tdd: false
+  test_command: ""
+  reason: >
+    No test runner is installed (no jest/vitest/node:test in
+    devDependencies) and package.json has no "test" script. CI only
+    runs lint + build + a smoke test that boots the MCP server and
+    checks tools/list responds — no tool logic (pagination in
+    flow-dependencies, NDJSON parsing in deploy-flow, session state in
+    test-bot-flow) is exercised automatically. To enable Strict TDD:
+    (1) install a test runner (vitest recommended: fast, native ESM/TS
+    support, works well with esbuild-bundled projects; node:test is a
+    zero-dependency alternative already available in the Node 22
+    runtime this project targets), (2) add a "test" script to
+    package.json, (3) add a unit-test layer for the 3 MCP tools with
+    the Genesys SDKs mocked, and (4) re-run sdd-init to flip
+    strict_tdd to true and record the resolved test_command.
+  coverage:
+    available: false
+    command: ""
+  quality_tools:
+    linter:
+      available: true
+      command: "pnpm run lint"
+    type_checker:
+      available: false
+      note: "tsc is configured (strict, noEmit) but not wired into any script, CI step, or pre-commit hook"
+    formatter:
+      available: true
+      command: "pnpm run format"
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes, especially anything touching deploy-flow.ts or deploy-runner (destructiveHint: true, pushes live changes to a Genesys Cloud org)
+    - Flag any change that adds a test runner or CI step as high-value given the current zero-test baseline
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Call out the MCP server <-> deploy-runner NDJSON protocol explicitly when a change touches either side (no shared schema/type module exists today)
+  design:
+    - Document architecture decisions with rationale
+    - For changes to the 3 MCP tools, document the zod schema (zod/v3 compat imports) and note when validation should move from post-parse `if` checks to `.refine()`
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - If a task adds tests, prefer vitest or node:test per the testing.reason guidance above
+  apply:
+    - Follow existing code patterns (thin MCP tool handlers, SDK interop isolated to deploy-runner/index.ts)
+    tdd: false # Strict TDD unavailable until a test runner is installed — see testing.reason
+    test_command: ""
+    - Do not silently swallow errors the way flow-dependencies.ts currently does (collapses all errors to "not found") — surface real error types when touching that code
+  verify:
+    test_command: ""
+    build_command: "pnpm run build"
+    coverage_threshold: 0
+    - lint_command: "pnpm run lint"
+  archive:
+    - Warn before merging destructive deltas
+    - Version bumps (package.json, .claude-plugin/plugin.json, .claude-plugin/marketplace.json) are currently manual/hand-duplicated — flag drift if a change touches versioning

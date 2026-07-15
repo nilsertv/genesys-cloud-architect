@@ -10,6 +10,7 @@
     "lint": "biome check",
     "lint:fix": "biome check --write",
     "format": "biome format --write",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts",
     "inspect-mcp": "pnpm dlx @modelcontextprotocol/inspector node servers/genesys-cloud-architect-mcp.js",
     "mcp-server": "node --experimental-strip-types src/mcp-server/index.ts",
     "mcp-server-with-op": "op run --env-file='./.env' -- node --experimental-strip-types src/mcp-server/index.ts",

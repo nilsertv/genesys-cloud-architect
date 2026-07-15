@@ -1,0 +1,55 @@
+change: update-flow
+created: 2026-07-14
+execution_mode: interactive
+artifact_store: openspec
+delivery_strategy: ask-on-risk
+chain_strategy: stacked-to-main
+
+phases:
+  explore:
+    status: done
+    artifact: openspec/changes/update-flow/exploration.md
+  proposal:
+    status: done
+    artifact: openspec/changes/update-flow/proposal.md
+  specs:
+    status: done
+    artifact: openspec/changes/update-flow/specs/update-flow/spec.md
+  design:
+    status: done
+    artifact: openspec/changes/update-flow/design.md
+  tasks:
+    status: done
+    artifact: openspec/changes/update-flow/tasks.md
+  apply:
+    status: partial
+    note: >
+      Slice A (Phase 1, tasks 1.1-1.5) implemented, fixed after independent
+      review found 3 HIGH + 1 MEDIUM bugs, then re-verified by a second
+      independent review — all 4 confirmed fixed, no regressions. Task 1.6
+      (empirical verification against a real Genesys Cloud org) remains
+      blocked: no GENESYS_REGION/GENESYS_CLIENT_ID/GENESYS_CLIENT_SECRET
+      available in this environment. Not committed yet — pending user
+      review. Phase 2 (Slice B) not started.
+    artifact: sdd/update-flow/apply-progress (engram obs id 752)
+  verify:
+    status: pending
+  archive:
+    status: pending
+
+open_decisions:
+  - id: tool-surface
+    question: "New dedicated update_flow MCP tool vs mode param on deploy_flow"
+    recommendation: "New dedicated tool"
+    confirmed: true
+    decision: "new-tool"
+  - id: test-strategy
+    question: "Narrow node:test extraction vs full vitest install vs no tests"
+    recommendation: "Narrow node:test extraction, scoped to new update logic only"
+    confirmed: true
+    decision: "narrow-node-test"
+  - id: pr-slicing
+    question: "Slice A (deploy-runner core + tests) then Slice B (MCP tool + skill docs)"
+    recommendation: "Two slices as scoped in exploration.md"
+    confirmed: true
+    decision: "two-slices-stacked-to-main"
