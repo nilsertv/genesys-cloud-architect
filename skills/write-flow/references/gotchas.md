@@ -100,7 +100,20 @@ The type definitions declare `setResponseBodyByLiteralString` but it does not ex
 
 ## Flow naming on re-runs
 
-`createFlow*Async` deletes an existing flow with the same name. This requires `architect:flow:delete` permission. If you don't have it, use a new name or use `checkoutAndLoadFlowByFlowNameAsync` to update existing flows.
+`createFlow*Async` deletes an existing flow with the same name. This requires `architect:flow:delete` permission. If you don't have it, use a new name, or use the non-destructive update flow described below.
+
+## Editing a flow in place instead of re-creating it
+
+Re-running `deploy_flow`/`buildFlow` against a flow name that already exists deletes and recreates it — the flow gets a new ID and its version history is gone. To edit a flow without losing either, use `checkoutAndLoadFlowByFlowIdAsync` / `checkoutAndLoadFlowByFlowNameAsync` via the `update_flow` MCP tool and an `updateFlow(scripting, flow)` export instead of `buildFlow`.
+
+Key mechanics, all handled by the deploy-runner's `updateFlow()` orchestrator (`src/deploy-runner/index.ts`) — you don't call these yourself from the flow file:
+
+- **`flowType` is always required**, for both `checkoutAndLoadFlowByFlowIdAsync` and `checkoutAndLoadFlowByFlowNameAsync`. There is no id-only lookup in the installed SDK version — even when you already know the flow's ID, you must also supply its type (e.g. `"inboundcall"`).
+- **Checkout acquires a lock.** `checkoutAndLoadFlowBy...Async` locks the flow for editing. If the checkout succeeds but the following save (`checkInAsync`/`publishAsync`) throws, the lock must be released via `flow.unlockAsync()` before the error is reported — otherwise the flow is stuck locked with no UI action able to release it. The deploy-runner does this automatically; it's why your `updateFlow` export must not call `checkInAsync`/`publishAsync` itself (that would move the save outside the guarantee).
+- **Locked-by-another-user is a distinct failure mode**, not a generic error. If someone else has the flow open in Architect, checkout fails unless `forceUnlock: true` is passed — which discards their unsaved UI edits. Default behavior (`forceUnlock: false`) fails loudly instead of silently overriding another user's work.
+- **`checkInAsync` vs `publishAsync`** still applies exactly as documented above — the deploy-runner calls one or the other based on the `publish` input, never both.
+
+See `sdk-patterns.md`'s "The `updateFlow` Contract" section for the export signature, and `SKILL.md`'s "Updating an Existing Flow" section for the MCP tool's input contract (`flowId`/`flowName`+`flowType`, `forceUnlock`, `publish`).
 
 ## Slot and entity type names must differ
 

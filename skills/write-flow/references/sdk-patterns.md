@@ -39,6 +39,28 @@ export async function buildFlow(scripting: ArchitectScripting) {
 - The deploy runner handles authentication and session management
 - Return `await flow.checkInAsync()` — this saves the flow and returns the flow object, which the deploy runner uses to run `validateAsync()` and report validation warnings/errors
 
+## The `updateFlow` Contract (editing an existing flow)
+
+To edit a flow that already exists in Genesys Cloud, export `updateFlow` instead of `buildFlow`:
+
+```typescript
+import type { ArchitectScripting } from "purecloud-flow-scripting-api-sdk-javascript";
+
+export async function updateFlow(scripting: ArchitectScripting, flow: unknown): Promise<void> {
+    const { archFactoryActions } = scripting.factories;
+
+    // `flow` is the flow object the deploy-runner already checked out and
+    // locked for you (via checkoutAndLoadFlowByFlowIdAsync /
+    // checkoutAndLoadFlowByFlowNameAsync) — mutate it directly, the same way
+    // you'd mutate a freshly created flow in buildFlow.
+}
+```
+
+- `updateFlow(scripting, flow): Promise<void>` — **edits only**. Unlike `buildFlow`, it must NOT call `flow.checkInAsync()` or `flow.publishAsync()` itself. The deploy-runner's `updateFlow()` orchestrator (in `src/deploy-runner/index.ts`) owns the save step so it can guarantee the flow is unlocked (`flow.unlockAsync()`) if the save fails after your edits succeed — a failure inside your own `checkInAsync`/`publishAsync` call would bypass that guarantee.
+- `flow` is passed in already checked out and locked — you never call a `checkoutAndLoadFlowBy...Async` method yourself; the deploy-runner does that before calling your `updateFlow` export, using the `flowId`/`flowName`+`flowType` the caller supplied to the `update_flow` MCP tool.
+- All the same factory namespaces (`archFactoryActions`, `archFactoryMenus`, `archFactoryStates`, `archFactoryTasks`) and variable/expression patterns documented below apply identically — you're mutating an existing flow object instead of a freshly created one, but the SDK calls are the same shape.
+- Driven by the `update_flow` MCP tool, not `deploy_flow` — see `SKILL.md`'s "Updating an Existing Flow" section for the tool's input contract.
+
 ## Flow Creation Methods
 
 | Flow Type | Factory Method |
@@ -171,3 +193,5 @@ Always `await` these:
 ## Re-creating Existing Flows
 
 `createFlow*Async` will delete an existing flow with the same name before creating. This requires `architect:flow:delete` permission. If the flow is referenced by another flow, delete the dependent flow first.
+
+To edit a flow in place instead — preserving its flow ID and version history — use the `updateFlow` contract above with the `update_flow` MCP tool, not `buildFlow`/`deploy_flow`. See `gotchas.md`'s "Editing a flow in place instead of re-creating it" section for the checkout/lock mechanics.
