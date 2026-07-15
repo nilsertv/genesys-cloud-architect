@@ -29,9 +29,10 @@ phases:
       independent review — all 4 confirmed fixed, no regressions. Task 1.6
       (empirical verification against a real Genesys Cloud org) remains
       blocked: no GENESYS_REGION/GENESYS_CLIENT_ID/GENESYS_CLIENT_SECRET
-      available in this environment. Not committed yet — pending user
-      review. Phase 2 (Slice B) not started.
+      available in this environment. Phase 2 (Slice B) not started.
     artifact: sdd/update-flow/apply-progress (engram obs id 752)
+    pr: https://github.com/nilsertv/genesys-cloud-architect/pull/1
+    branch: feat/update-flow-slice-a
   verify:
     status: pending
   archive:
