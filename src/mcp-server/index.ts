@@ -5,6 +5,7 @@ import { z } from "zod/v3";
 import { deployFlow } from "./tools/deploy-flow.ts";
 import { flowDependencies } from "./tools/flow-dependencies.ts";
 import { testBotFlow } from "./tools/test-bot-flow.ts";
+import { updateFlow } from "./tools/update-flow.ts";
 
 const envResults = z
     .object({
@@ -52,6 +53,18 @@ server.registerTool(
     "deploy_flow",
     deployFlowTool.config,
     deployFlowTool.handler,
+);
+
+const updateFlowTool = updateFlow({
+    region: envVars.GENESYS_REGION,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+    deployScriptPath: envVars.DEPLOY_SCRIPT_PATH,
+});
+server.registerTool(
+    "update_flow",
+    updateFlowTool.config,
+    updateFlowTool.handler,
 );
 
 const testBotFlowTool = testBotFlow({
