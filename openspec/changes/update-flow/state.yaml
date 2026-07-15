@@ -24,15 +24,37 @@ phases:
   apply:
     status: partial
     note: >
-      Slice A (Phase 1, tasks 1.1-1.5) implemented, fixed after independent
-      review found 3 HIGH + 1 MEDIUM bugs, then re-verified by a second
-      independent review — all 4 confirmed fixed, no regressions. Task 1.6
-      (empirical verification against a real Genesys Cloud org) remains
-      blocked: no GENESYS_REGION/GENESYS_CLIENT_ID/GENESYS_CLIENT_SECRET
-      available in this environment. Phase 2 (Slice B) not started.
+      Slice A (Phase 1, tasks 1.1-1.5): implemented, fixed after independent
+      review found 3 HIGH + 1 MEDIUM bugs, re-verified by a second
+      independent review — all 4 confirmed fixed, no regressions.
+      Slice B (Phase 2, tasks 2.1-2.5): implemented as one work unit, then
+      split into 2 PRs for review-size budget (code vs docs). Independent
+      review found 1 CRITICAL bug (update_flow's .refine()-wrapped
+      inputSchema made tools/list advertise an empty parameter schema —
+      the MCP SDK cannot read .shape off a ZodEffects instance). Fixed by
+      reverting to a flat zod shape + manual post-parse validation in the
+      handler (matching deploy-flow.ts/flow-dependencies.ts's existing
+      pattern), and reverting the types.ts widening that enabled the bug.
+      A third independent review, with a real McpServer+Client roundtrip
+      over InMemoryTransport, confirmed the fix and no regressions in the
+      other 3 tools. Tasks 1.6 and 2.6 (empirical verification against a
+      real Genesys Cloud org) remain blocked: no
+      GENESYS_REGION/GENESYS_CLIENT_ID/GENESYS_CLIENT_SECRET available in
+      this environment.
     artifact: sdd/update-flow/apply-progress (engram obs id 752)
-    pr: https://github.com/nilsertv/genesys-cloud-architect/pull/1
-    branch: feat/update-flow-slice-a
+    prs:
+      - url: https://github.com/nilsertv/genesys-cloud-architect/pull/1
+        branch: feat/update-flow-slice-a
+        title: "feat: add non-destructive updateFlow to deploy-runner (Slice A)"
+        base: main
+      - url: https://github.com/nilsertv/genesys-cloud-architect/pull/2
+        branch: feat/update-flow-slice-b
+        title: "feat: add update_flow MCP tool"
+        base: feat/update-flow-slice-a
+      - url: https://github.com/nilsertv/genesys-cloud-architect/pull/3
+        branch: feat/update-flow-slice-b-docs
+        title: "docs: document update_flow workflow in write-flow skill"
+        base: feat/update-flow-slice-b
   verify:
     status: pending
   archive:
