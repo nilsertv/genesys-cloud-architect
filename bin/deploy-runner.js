@@ -117156,9 +117156,10 @@ function toArchitectSdkRegion(scripting, apiDomain) {
 function classifyUpdateError(err) {
   const message = err instanceof Error ? err.message : String(err);
   if (/locked/i.test(message)) return "locked-by-other-user";
-  if (/not found|404/i.test(message)) return "not-found";
-  if (/type/i.test(message) && /mismatch|invalid/i.test(message))
-    return "type-mismatch";
+  if (/could not find|not[\s-]?found|does not exist|architect\.flow\.not\.found|no matches/i.test(
+    message
+  ))
+    return "not-found";
   return "unknown";
 }
 async function updateFlow(scripting, absoluteFlowPath, opts) {

@@ -27,9 +27,18 @@ phases:
       Slice A (Phase 1, tasks 1.1-1.5) implemented, fixed after independent
       review found 3 HIGH + 1 MEDIUM bugs, then re-verified by a second
       independent review — all 4 confirmed fixed, no regressions. Task 1.6
-      (empirical verification against a real Genesys Cloud org) remains
-      blocked: no GENESYS_REGION/GENESYS_CLIENT_ID/GENESYS_CLIENT_SECRET
-      available in this environment. Phase 2 (Slice B) not started.
+      (empirical verification, real Genesys Cloud org "Calidda") now DONE:
+      confirmed flowId preserved across update, unlockAsync() correctly
+      fired on 3 different real failure types, publish:true confirmed to
+      invoke publishAsync(). classifyUpdateError() fixed on this branch
+      using the real captured SDK error text for not-found (by id: HTTP
+      404 "architect.flow.not.found"; by name: "no matches"). Empirically
+      discovered type-mismatch is unreachable via either checkout path —
+      folded into not-found, documented in design.md/tasks.md, not a bug.
+      locked-by-other-user and the exact architect:flow:edit permission
+      name remain unverified (require a second real user / org admin
+      changes, explicitly declined by the user for this pass). Phase 2
+      (Slice B) implemented separately, needs rebase onto this fix.
     artifact: sdd/update-flow/apply-progress (engram obs id 752)
     pr: https://github.com/nilsertv/genesys-cloud-architect/pull/1
     branch: feat/update-flow-slice-a

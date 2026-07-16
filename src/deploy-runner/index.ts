@@ -12,11 +12,23 @@ const TIMEOUT_MS = 90_000;
 
 type LogLevel = "info" | "warn" | "error";
 
-// Provisional classification pending empirical confirmation against a real
-// Genesys Cloud org (tasks.md 1.6 / 2.6). BLOCKED in this environment for lack
-// of credentials — see apply-progress deviation notes. Refine the regexes
-// once real SDK error text/status for locked/not-found/type-mismatch cases
-// has been captured.
+// "not-found" is empirically confirmed (tasks.md 1.6/2.6, real Genesys Cloud
+// org): both checkoutAndLoadFlowByFlowIdAsync's 404
+// ("Could not find flow with specified ID. (architect.flow.not.found)") and
+// checkoutAndLoadFlowByFlowNameAsync's "no matches" are covered below.
+//
+// "type-mismatch" is kept in this union for API completeness but is NOT
+// reachable in practice, confirmed empirically: (1) on the flowId path,
+// checkoutAndLoadFlowByFlowIdAsync does not enforce flowType at all — a
+// valid flowId with an unrelated flowType still succeeds; (2) on the
+// flowName path, a name that exists under a different type produces the
+// exact same "no matches" response as a name that doesn't exist at all —
+// the SDK gives no signal to distinguish "wrong type" from "not found".
+// classifyUpdateError() therefore folds both into "not-found" below.
+//
+// "locked-by-other-user" remains a provisional guess — not empirically
+// confirmed (requires a second real user/OAuth identity to hold a
+// conflicting lock, which was out of scope for solo verification).
 export type UpdateErrorKind =
     | "locked-by-other-user"
     | "not-found"
@@ -311,16 +323,21 @@ function toArchitectSdkRegion(
 // ── Update flow (edit-in-place) ─────────────────────────────────────────
 
 /**
- * Provisional error classifier — see UpdateErrorKind's doc comment. Message
- * text patterns are best-effort guesses pending empirical confirmation
- * (tasks.md 1.6/2.6); refine once real SDK error text has been captured.
+ * Error classifier — see UpdateErrorKind's doc comment for what's empirically
+ * confirmed vs. still provisional.
  */
 function classifyUpdateError(err: unknown): UpdateErrorKind {
     const message = err instanceof Error ? err.message : String(err);
     if (/locked/i.test(message)) return "locked-by-other-user";
-    if (/not found|404/i.test(message)) return "not-found";
-    if (/type/i.test(message) && /mismatch|invalid/i.test(message))
-        return "type-mismatch";
+    // Empirically captured SDK text, real Genesys Cloud org:
+    //   by id:   "Could not find flow with specified ID. (architect.flow.not.found)"
+    //   by name: "no matches" (also covers the unreachable type-mismatch case)
+    if (
+        /could not find|not[\s-]?found|does not exist|architect\.flow\.not\.found|no matches/i.test(
+            message,
+        )
+    )
+        return "not-found";
     return "unknown";
 }
 
