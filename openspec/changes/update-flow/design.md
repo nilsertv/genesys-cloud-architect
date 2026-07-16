@@ -132,14 +132,16 @@ const inputSchema = z
 
 ## Differentiated Error Handling
 
-Per `openspec/config.yaml`, do not collapse errors like `flow-dependencies.ts`. `update-flow.ts` maps `errorKind` (set by `index.ts`, using `ArchFlowInfo.isLockedByAnotherUser`/HTTP status/SDK message text — exact strings confirmed empirically in `sdd-apply`) to distinct `isError` messages:
+Per `openspec/config.yaml`, do not collapse errors like `flow-dependencies.ts`. `update-flow.ts` maps `errorKind` (set by `index.ts`'s `classifyUpdateError()`) to distinct `isError` messages:
 
 | `errorKind` | Message template |
 |---|---|
 | `locked-by-other-user` | "Flow is locked by another user. Retry with forceUnlock:true to override (discards their unsaved edits)." |
 | `not-found` | "Flow not found for the given flowId/flowName+flowType." |
-| `type-mismatch` | "flowType does not match the existing flow's type." |
+| `type-mismatch` | "flowType does not match the existing flow's type." (kept for API completeness — see below) |
 | `unknown` (default) | Raw SDK error message, unmodified — never silently swallowed. |
+
+**Empirically confirmed against a real Genesys Cloud org (tasks.md 1.6/2.6)**: `not-found` covers both `checkoutAndLoadFlowByFlowIdAsync`'s 404 (`"Could not find flow with specified ID. (architect.flow.not.found)"`) and `checkoutAndLoadFlowByFlowNameAsync`'s `"no matches"`. `type-mismatch` is **not reachable** — checkout by `flowId` doesn't enforce `flowType` at all, and checkout by `flowName` with the wrong `flowType` returns the identical `"no matches"` response as a genuinely nonexistent name, so the SDK gives no signal to distinguish the two. The `type-mismatch` kind and message stay defined for forward compatibility (in case a future SDK version changes this), but `classifyUpdateError()` never actively detects it — anything matching this description surfaces as `not-found`. `locked-by-other-user` remains unconfirmed (requires a second real user/OAuth identity, out of scope for solo verification).
 
 When `unlocked:true` is present on a failure, append: "The flow lock was automatically released after this failure." When `unlocked:false` (second failure calling `unlockAsync`), append: "WARNING: automatic unlock also failed — the flow may remain locked; manual intervention required."
 

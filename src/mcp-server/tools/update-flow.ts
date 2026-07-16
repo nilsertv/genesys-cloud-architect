@@ -32,7 +32,12 @@ const ERROR_KIND_MESSAGES: Record<
 > = {
     "locked-by-other-user":
         "Flow is locked by another user. Retry with forceUnlock:true to override (discards their unsaved edits).",
-    "not-found": "Flow not found for the given flowId/flowName+flowType.",
+    "not-found":
+        "Flow not found for the given flowId/flowName+flowType. If using flowName, note a mismatched flowType produces this same error (the SDK cannot distinguish the two).",
+    // Kept for forward compatibility — empirically unreachable with the
+    // current SDK, see classifyUpdateError()'s doc comment in
+    // src/deploy-runner/index.ts. A mismatched flowType always surfaces as
+    // "not-found" instead.
     "type-mismatch": "flowType does not match the existing flow's type.",
     // "unknown" falls through to the raw SDK error message, unmodified.
     unknown: undefined,

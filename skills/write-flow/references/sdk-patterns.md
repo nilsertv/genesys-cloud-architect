@@ -87,16 +87,26 @@ Actions are added by passing the state or task object directly to action factory
 
 ## Variables
 
+There is no `addVariableString`/`addVariableInteger`/`addVariableBoolean` convenience
+method on the flow object — only the generic `addVariable(name, type, description?)`,
+where `type` comes from `flow.dataTypes` (a `Record<string, ArchDataType>` keyed by
+lowercase type name, e.g. `"string"`, `"integer"`, `"boolean"`, `"datetime"`):
+
 ```typescript
-const nameVar = flow.addVariableString("customerName");
+const nameVar = flow.addVariable("customerName", flow.dataTypes.string);
 nameVar.setDefaultValueAsString("Guest");
 
-const countVar = flow.addVariableInteger("attemptCount");
+const countVar = flow.addVariable("attemptCount", flow.dataTypes.integer);
 countVar.setDefaultValueAsInteger(0);
 
-const isVIPVar = flow.addVariableBoolean("isVIP");
+const isVIPVar = flow.addVariable("isVIP", flow.dataTypes.boolean);
 isVIPVar.setDefaultValueAsBoolean(false);
 ```
+
+`flow.dataTypes.string` is confirmed against a real deployed flow. The other keys
+follow the same lowercase naming convention used throughout the SDK (see
+`ArchEnums#FLOW_TYPES`) and appear as such in the SDK bundle, but were not
+individually exercised against a live org.
 
 Common built-in variables: `Call.Ani` (caller's phone), `Call.Dnis` (dialed number).
 

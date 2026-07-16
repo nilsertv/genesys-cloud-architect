@@ -37,10 +37,23 @@ phases:
       pattern), and reverting the types.ts widening that enabled the bug.
       A third independent review, with a real McpServer+Client roundtrip
       over InMemoryTransport, confirmed the fix and no regressions in the
-      other 3 tools. Tasks 1.6 and 2.6 (empirical verification against a
-      real Genesys Cloud org) remain blocked: no
-      GENESYS_REGION/GENESYS_CLIENT_ID/GENESYS_CLIENT_SECRET available in
-      this environment.
+      other 3 tools.
+      Tasks 1.6 and 2.6 (empirical verification, real Genesys Cloud org
+      "Calidda") now DONE/PARTIALLY DONE: confirmed flowId preserved
+      across update (core claim), unlockAsync() correctly fired on 3
+      different real failure types, publish:true confirmed to invoke
+      publishAsync(). classifyUpdateError() fixed using the real captured
+      SDK error text for not-found (by id: HTTP 404
+      "architect.flow.not.found"; by name: "no matches"). Empirically
+      discovered type-mismatch is unreachable via either checkout path —
+      folded into not-found, documented in design.md/tasks.md, not a bug.
+      Also fixed an unrelated pre-existing doc bug found along the way:
+      sdk-patterns.md documented flow.addVariableString()/Integer()/
+      Boolean(), none of which exist in the installed SDK — only the
+      generic flow.addVariable(name, type, description?) does.
+      locked-by-other-user and the exact architect:flow:edit permission
+      name remain unverified (require a second real user / org admin
+      changes, explicitly declined by the user for this pass).
     artifact: sdd/update-flow/apply-progress (engram obs id 752)
     prs:
       - url: https://github.com/nilsertv/genesys-cloud-architect/pull/1
