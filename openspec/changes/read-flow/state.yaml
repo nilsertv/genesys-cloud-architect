@@ -70,15 +70,27 @@ phases:
       branch from origin/main was factually incorrect — update-flow (PRs
       #1-3) is NOT merged into main (verified: commit 0382e5e is not an
       ancestor of origin/main or local main; main's index.ts has no mode
-      dispatch or update-helpers.ts). feat/read-flow-slice-a was created
-      from feat/update-flow-slice-b-docs (the most complete, current
-      update-flow branch) instead, since read-flow's Slice A directly
-      reuses resolveFlowIdentifier and index.ts's mode dispatch, which
-      only exist there. This means this branch's eventual PR must target
-      update-flow's final branch (or wait for update-flow to merge to
-      main first) rather than main directly — a chain-target decision
-      still needed before opening a PR, independent of read-flow's own
-      stacked-to-main chain_strategy.
+      dispatch or update-helpers.ts). sdd-apply created feat/read-flow-slice-a
+      from feat/update-flow-slice-b-docs (the full 3-PR update-flow stack)
+      since that's where resolveFlowIdentifier and the mode dispatch exist.
+
+      Orchestrator follow-up (post-apply, same session): verified that
+      update-helpers.ts, update-helpers.test.ts, index.ts, and
+      bin/deploy-runner.js are byte-identical between feat/update-flow-slice-a
+      (PR #1, already CI-green after the trailing-comma ci.yml fix) and
+      feat/update-flow-slice-b-docs (PR #3 tip) — Slices B/C of update-flow
+      only touched the MCP tool layer and skill docs, never the deploy-runner.
+      So read-flow's Slice A only genuinely depends on PR #1, not the full
+      stack. Ran `git rebase --onto feat/update-flow-slice-a
+      feat/update-flow-slice-b-docs feat/read-flow-slice-a` — clean,
+      zero conflicts (identical trees on the touched files), new commit
+      SHAs 319c433/6dba9e3/cf39948. Re-ran pnpm test (16/16), pnpm exec tsc
+      --noEmit (0 errors), pnpm run build (clean) post-rebase to confirm
+      no regression. feat/read-flow-slice-a now depends only on
+      feat/update-flow-slice-a — its eventual PR should target
+      feat/update-flow-slice-a (PR #1's branch) rather than the full
+      update-flow stack, and can be re-targeted to main directly once
+      PR #1 merges.
 
       Slices B (tool MCP) and C (docs + final empirical verification)
       still pending.

@@ -14,9 +14,14 @@ variables/actions before editing.
 ### Requirement: Flow Identifier Resolution
 
 `read_flow` MUST accept either `flowId` alone or `flowName` +
-`flowType`, and MUST reject any other combination via zod `.refine()`
-before spawning the deploy-runner. Mirrors `update_flow`, reuses
-`resolveFlowIdentifier`.
+`flowType`, and MUST reject any other combination. The `inputSchema`
+MUST be a flat `ZodRawShape` (never wrapped in `.refine()`/`ZodEffects`)
+with the exactly-one-of check done as a manual post-parse `if` in the
+handler, exactly like `update_flow` post-fix — the installed MCP SDK's
+`tools/list` introspection cannot read `.shape` off a `ZodEffects`
+instance and silently advertises zero parameters when it's used (see
+`design.md`/`tasks.md` for the confirmed production bug this caused in
+`update_flow`). Reuses `resolveFlowIdentifier`.
 
 #### Scenario: Resolve by flowId
 - GIVEN a caller supplies `flowId`
@@ -30,8 +35,9 @@ before spawning the deploy-runner. Mirrors `update_flow`, reuses
 
 #### Scenario: Missing or ambiguous identifier
 - GIVEN neither identifier, or both `flowId` and `flowName` are supplied
-- WHEN input is validated
-- THEN the `.refine()` MUST fail and no process MUST be spawned
+- WHEN the handler runs its post-parse validation
+- THEN it MUST fail with one of two distinct messages (both-given vs.
+  neither-given) and no process MUST be spawned
 
 ### Requirement: Read-Only Export Workflow
 
@@ -68,18 +74,25 @@ error-collapsing anti-pattern).
 ### Requirement: Flow Version Parameter
 
 `read_flow` MUST accept optional `flowVersion` (`"latest"` default, a
-version number, `"debug"`, or `"published"`) and MUST reject any other
-value at validation time.
+version number, `"debug"`, or `"published"`) as a non-empty string
+(`z.string().min(1).optional()`). The schema MUST NOT pre-validate
+against a fixed enum client-side — valid version numbers are open-ended
+and not enumerable — the SDK is the source of truth for rejecting
+invalid values; its error MUST be surfaced, not swallowed.
 
 #### Scenario: Default and valid explicit versions
 - GIVEN `flowVersion` omitted, `"debug"`, `"published"`, or a valid number
 - WHEN input is validated
 - THEN it MUST pass (omitted defaults to `"latest"`) and that version MUST be requested from the SDK
 
-#### Scenario: Invalid version value
-- GIVEN `flowVersion` outside the accepted set
-- WHEN input is validated
-- THEN validation MUST fail before spawning the deploy-runner
+#### Scenario: Invalid version value rejected by the SDK
+- GIVEN `flowVersion` set to a value the SDK does not recognize
+- WHEN `read_flow` requests that version from the SDK
+- THEN the deploy-runner MUST surface the SDK's real error message rather
+  than pre-emptively rejecting client-side
+- AND the exact `errorKind` classification is unverified — confirm
+  empirically during `sdd-apply` (see the known `flowVersion: "published"`
+  finding from Slice A, filed under `"unknown"` pending Slice C review)
 
 #### Scenario: Published requested but none exists (unverified)
 - GIVEN `flowVersion: "published"` and the flow was never published
