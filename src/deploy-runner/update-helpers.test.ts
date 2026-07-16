@@ -3,6 +3,7 @@ import { describe, it, mock } from "node:test";
 import {
     applyUpdateAndSave,
     resolveFlowIdentifier,
+    truncateContent,
     type UpdatableFlow,
 } from "./update-helpers.ts";
 
@@ -164,5 +165,29 @@ describe("applyUpdateAndSave", () => {
         assert.equal(callCount(flow.publishAsync), 1);
         assert.equal(callCount(flow.checkInAsync), 0);
         assert.equal(callCount(flow.unlockAsync), 0);
+    });
+});
+
+describe("truncateContent", () => {
+    it("returns the content unchanged when under the limit", () => {
+        const result = truncateContent("hello", 10);
+        assert.deepEqual(result, { content: "hello", truncated: false });
+    });
+
+    it("returns the content unchanged when exactly at the limit", () => {
+        const result = truncateContent("hello", 5);
+        assert.deepEqual(result, { content: "hello", truncated: false });
+    });
+
+    it("truncates and appends a marker when over the limit", () => {
+        const content = "0123456789";
+        const result = truncateContent(content, 5);
+
+        assert.equal(result.truncated, true);
+        assert.ok(result.content.startsWith("01234"));
+        assert.match(
+            result.content,
+            /\[TRUNCATED — original size 10 chars, showing first 5\./,
+        );
     });
 });

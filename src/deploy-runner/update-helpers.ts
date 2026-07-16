@@ -1,4 +1,5 @@
-// Pure, side-effect-free helpers for the "update" (edit-in-place) flow mode.
+// Pure, side-effect-free helpers shared by the "update" (edit-in-place) and
+// "read" (read-only export) flow modes.
 //
 // This module has ZERO top-level side effects on purpose: index.ts patches
 // global https.request/https.get, console.log, and process.stdout.write at
@@ -93,4 +94,26 @@ export async function applyUpdateAndSave(
         carrier.unlocked = unlocked;
         throw carrier;
     }
+}
+
+/**
+ * Truncates `content` to at most `maxChars` characters, appending a marker
+ * comment when truncation occurs so callers never mistake a cut-off export
+ * for the full document. Pure — no I/O, no side effects.
+ *
+ * Used by the "read" mode to cap exported flow YAML at `MAX_YAML_CHARS`
+ * before it's emitted, so a very large/complex flow can't silently blow out
+ * the caller's context window.
+ */
+export function truncateContent(
+    content: string,
+    maxChars: number,
+): { content: string; truncated: boolean } {
+    if (content.length <= maxChars) {
+        return { content, truncated: false };
+    }
+    const marker =
+        `\n\n# [TRUNCATED — original size ${content.length} chars, showing first ${maxChars}. ` +
+        `Request a specific flowVersion or narrow the review to reduce size.]`;
+    return { content: content.slice(0, maxChars) + marker, truncated: true };
 }
