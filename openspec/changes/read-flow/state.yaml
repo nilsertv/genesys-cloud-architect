@@ -1,0 +1,114 @@
+change: read-flow
+created: 2026-07-16
+execution_mode: interactive
+artifact_store: openspec
+delivery_strategy: ask-on-risk
+chain_strategy: stacked-to-main
+
+phases:
+  explore:
+    status: done
+    note: >
+      No exploration.md file was created for this change (deliberately,
+      per user request). Full exploration summary was captured inline in
+      the sdd-propose launch prompt and used as the sole source for this
+      proposal — no persisted exploration artifact exists.
+    artifact: none
+  proposal:
+    status: done
+    artifact: openspec/changes/read-flow/proposal.md
+  specs:
+    status: done
+    artifact: openspec/changes/read-flow/specs/read-flow/spec.md
+  design:
+    status: done
+    artifact: openspec/changes/read-flow/design.md
+  tasks:
+    status: done
+    artifact: openspec/changes/read-flow/tasks.md
+    note: >
+      3 work units (Slice A core / Slice B tool MCP / Slice C docs+empirical),
+      not 2 like update-flow — read-flow.ts alone (mirrors update-flow.ts's
+      spawn+NDJSON boilerplate) plus its own tools/list schema test already
+      rounds ~360-400 lines; adding docs on top would risk exceeding the
+      400-line budget. Precedent: update-flow's own Slice B was split into
+      2 PRs (code vs docs) mid-apply for the same reason (see
+      update-flow/state.yaml apply note) — planning the 3rd slice up front
+      here instead of discovering it during apply.
+  apply:
+    status: partial
+    note: >
+      Slice A (Phase 1, tasks 1.1-1.6) complete on branch
+      feat/read-flow-slice-a: truncateContent() helper + tests (16/16
+      green), readFlow() + `--mode read` in the deploy-runner, empirically
+      verified against the real "Calidda" org (same disposable test flow
+      used by update-flow: ZZZ-SDD-Test-DoNotUse-UpdateFlow, flowId
+      69cd3550-0848-4fd7-a5c7-4be615b20ced). Confirmed: (a) full valid
+      YAML export (2297 chars, well under MAX_YAML_CHARS, truncated:false),
+      (b) NO lock acquired — a --mode update checkout run immediately
+      after the read succeeded cleanly against the same flow, proving
+      loadFlowByFlowIdAsync never took a lock for readFlow to leave
+      behind. Also confirmed empirically: not-found classification works
+      unchanged in read mode; flowVersion:"published" against a
+      never-published flow errors explicitly ("... version 'published' is
+      missing. (not.found)") rather than silently falling back, though
+      classifyUpdateError() currently files this under "unknown" (regex
+      doesn't match the literal "(not.found)" pattern) — left for Slice C
+      to re-confirm end-to-end and decide if it needs its own errorKind.
+      architect:flow:view permission still NOT isolated (same limitation
+      already documented for update-flow's architect:flow:edit) — all
+      calls succeeded under the org's current OAuth client role, deferred
+      to Slice C per open_decisions.architect-flow-view-permission.
+
+      Deviation from design.md found during verification: exportToObjectAsync's
+      awaited Promise value was undefined against a real flow even though
+      the SDK logged successful export generation — the real
+      {content, fileName} only arrives via the callback parameter.
+      readFlow() reads it from there instead of the awaited return value.
+
+      IMPORTANT branch-base correction: the orchestrator's instruction to
+      branch from origin/main was factually incorrect — update-flow (PRs
+      #1-3) is NOT merged into main (verified: commit 0382e5e is not an
+      ancestor of origin/main or local main; main's index.ts has no mode
+      dispatch or update-helpers.ts). feat/read-flow-slice-a was created
+      from feat/update-flow-slice-b-docs (the most complete, current
+      update-flow branch) instead, since read-flow's Slice A directly
+      reuses resolveFlowIdentifier and index.ts's mode dispatch, which
+      only exist there. This means this branch's eventual PR must target
+      update-flow's final branch (or wait for update-flow to merge to
+      main first) rather than main directly — a chain-target decision
+      still needed before opening a PR, independent of read-flow's own
+      stacked-to-main chain_strategy.
+
+      Slices B (tool MCP) and C (docs + final empirical verification)
+      still pending.
+  verify:
+    status: pending
+  archive:
+    status: pending
+
+open_decisions:
+  - id: tool-name
+    question: "Nombre del nuevo tool MCP de solo lectura (candidatos: get_flow, read_flow, export_flow)"
+    recommendation: "read_flow"
+    confirmed: true
+    decision: "read_flow"
+  - id: flow-format-param
+    question: "¿Exponer flowFormat como parámetro (yaml/architect) o fijarlo siempre en yaml?"
+    recommendation: "Solo yaml — no exponer 'architect' como opción, sin caso de uso claro para este propósito"
+    confirmed: true
+    decision: "yaml-fixed-not-exposed"
+  - id: size-guard-strategy
+    question: "Estrategia de guard de tamaño para flows grandes/complejos exportados a YAML"
+    recommendation: "Diferir a sdd-design/sdd-spec, no bloquea el proposal"
+    confirmed: true
+    decision: "truncate-at-MAX_YAML_CHARS-200000-with-truncated-flag; starting value to validate empirically in sdd-apply"
+  - id: resolve-flow-identifier-sharing
+    question: "Reutilizar resolveFlowIdentifier tal cual (update-helpers.ts) vs. extraerlo a un módulo neutral compartido entre read y update"
+    recommendation: "Diferir a sdd-design; decisión menor, solo 2 consumidores hoy"
+    confirmed: true
+    decision: "reuse-as-is-from-update-helpers-no-extraction"
+  - id: architect-flow-view-permission
+    question: "Confirmar empíricamente que loadFlowBy...Async solo requiere architect:flow:view (no edit/unlock)"
+    recommendation: "Diferir a sdd-apply, mismo patrón usado para architect:flow:edit en update-flow"
+    confirmed: false
