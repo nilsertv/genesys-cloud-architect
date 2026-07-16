@@ -6,7 +6,11 @@ import https from "node:https";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { applyUpdateAndSave, resolveFlowIdentifier } from "./update-helpers.ts";
+import {
+    applyUpdateAndSave,
+    resolveFlowIdentifier,
+    truncateContent,
+} from "./update-helpers.ts";
 
 const TIMEOUT_MS = 90_000;
 
@@ -46,6 +50,9 @@ function emit(
         error?: string;
         unlocked?: boolean;
         errorKind?: UpdateErrorKind;
+        content?: string;
+        fileName?: string;
+        truncated?: boolean;
     },
 ): void;
 function emit(type: string, ...args: unknown[]): void {
@@ -432,6 +439,107 @@ export async function updateFlow(
     };
 }
 
+// ── Read flow (read-only export) ────────────────────────────────────────
+
+// ~50k tokens @ ~4 chars/token — a conservative starting value, NOT yet
+// validated against real flow exports (see design.md's Open Questions).
+// Empirical verification against the "Calidda" org (tasks.md 1.6) is what
+// this constant should be tuned against, if a real flow ever gets close to
+// or exceeds it.
+const MAX_YAML_CHARS = 200_000;
+
+/**
+ * Loads an existing flow WITHOUT checkout/lock (`loadFlowBy{FlowId,
+ * FlowName}Async` — the explicit no-checkout sibling of
+ * `checkoutAndLoadFlowBy...Async` used by `updateFlow` above, confirmed in
+ * the installed SDK's types.d.ts, lines 3218/3231) and exports its full
+ * definition to YAML via `exportToObjectAsync`, explicitly requesting
+ * `archEnums.FLOW_FORMAT_TYPES.yaml` (the SDK's default format is
+ * `architect`, a semi-opaque backup/restore format — never what a caller
+ * wants here). The exported content is truncated to `MAX_YAML_CHARS` via
+ * the shared, pure `truncateContent` helper before being returned.
+ *
+ * Unlike `updateFlow`, there is no lock to release on failure — no
+ * `unlockAsync()` call, no `unlocked` flag, no "unlock also failed" failure
+ * mode. The single try/catch in `main()`'s `mode === "read"` branch only
+ * needs to classify the error, not clean up any acquired state.
+ */
+export async function readFlow(
+    scripting: ArchitectScripting,
+    opts: {
+        flowId?: string;
+        flowName?: string;
+        flowType: string;
+        flowVersion?: string;
+    },
+): Promise<{
+    flowId: string;
+    flowName: string;
+    content: string;
+    fileName: string;
+    truncated: boolean;
+}> {
+    const identifier = resolveFlowIdentifier(opts);
+    const { archFactoryFlows } = scripting.factories;
+    const { archEnums } = scripting.enums;
+
+    emit(
+        "log",
+        "info",
+        identifier.kind === "byId"
+            ? `Loading flow by id (no lock): ${identifier.flowId}`
+            : `Loading flow by name (no lock): ${identifier.flowName} (${identifier.flowType})`,
+    );
+
+    const flow =
+        identifier.kind === "byId"
+            ? await archFactoryFlows.loadFlowByFlowIdAsync(
+                  identifier.flowId,
+                  opts.flowType,
+                  opts.flowVersion,
+              )
+            : await archFactoryFlows.loadFlowByFlowNameAsync(
+                  identifier.flowName,
+                  identifier.flowType,
+                  opts.flowVersion,
+              );
+
+    // NOTE — deviation from design.md's contract, discovered empirically
+    // (tasks.md 1.6, real org): the resolved Promise value of
+    // `exportToObjectAsync` is NOT the `ExportInfoType` — it resolved to
+    // `undefined` against a real flow, even though the SDK's own log
+    // confirmed "flow export content successfully generated." The actual
+    // `{content, fileName}` is only ever delivered via the callback
+    // parameter (`callbackExportObject`), matching the SDK's own doc
+    // comment: "the callback function is passed a JSON object that
+    // contains flow export information." Capture it there instead of
+    // trusting the awaited return value.
+    let exported: { content: string; fileName: string } | undefined;
+    await flow.exportToObjectAsync((result) => {
+        exported = result;
+    }, archEnums.FLOW_FORMAT_TYPES.yaml);
+
+    if (!exported) {
+        throw new Error(
+            "exportToObjectAsync completed without invoking its callback " +
+                "with export content.",
+        );
+    }
+
+    const { content, truncated } = truncateContent(
+        exported.content,
+        MAX_YAML_CHARS,
+    );
+
+    return {
+        flowId: flow.id,
+        flowName: flow.name,
+        content,
+        fileName: exported.fileName,
+        truncated,
+    };
+}
+
 // ── Main ───────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -451,6 +559,7 @@ async function main(): Promise<void> {
             "flow-id": { type: "string" },
             "flow-name": { type: "string" },
             "flow-type": { type: "string" },
+            "flow-version": { type: "string" },
             "force-unlock": { type: "boolean", default: false },
             publish: { type: "boolean", default: false },
         },
@@ -461,21 +570,33 @@ async function main(): Promise<void> {
 
     // Default (no --mode given) is "create" — the historical `deploy_flow`
     // behavior, preserved for backward compatibility. But if --mode IS given
-    // and is neither "create" nor "update", fail loudly rather than silently
-    // falling back to "create" — that fallback is the MOST destructive path
-    // (delete-and-recreate), so a typo like "--mode updte" must never be
-    // allowed to trigger it silently.
+    // and is neither "create", "update", nor "read", fail loudly rather than
+    // silently falling back to "create" — that fallback is the MOST
+    // destructive path (delete-and-recreate), so a typo like "--mode updte"
+    // must never be allowed to trigger it silently.
     const rawMode = values.mode;
-    if (rawMode !== undefined && rawMode !== "create" && rawMode !== "update") {
+    if (
+        rawMode !== undefined &&
+        rawMode !== "create" &&
+        rawMode !== "update" &&
+        rawMode !== "read"
+    ) {
         emit("result", {
             success: false,
-            error: `Invalid --mode "${rawMode}". Must be "create" or "update".`,
+            error: `Invalid --mode "${rawMode}". Must be "create", "update", or "read".`,
         });
         process.exit(1);
     }
-    const mode = rawMode === "update" ? "update" : "create";
+    const mode =
+        rawMode === "update"
+            ? "update"
+            : rawMode === "read"
+              ? "read"
+              : "create";
 
-    if (!flowFile) {
+    // "read" mode never runs a user flow file — it only loads an existing
+    // flow and exports it — so --flow-file is not required in that mode.
+    if (mode !== "read" && !flowFile) {
         emit("result", {
             success: false,
             error: "Missing --flow-file argument",
@@ -483,7 +604,9 @@ async function main(): Promise<void> {
         process.exit(1);
     }
 
-    const absoluteFlowPath = path.resolve(flowFile);
+    // Guaranteed defined for "create"/"update" by the guard above (TS can't
+    // see the mode/flowFile correlation across the `if`, hence the assertion).
+    const absoluteFlowPath = flowFile ? path.resolve(flowFile) : undefined;
 
     const region = process.env.GENESYS_REGION;
     const clientId = process.env.GENESYS_CLIENT_ID;
@@ -521,7 +644,8 @@ async function main(): Promise<void> {
 
     if (mode === "update") {
         try {
-            const result = await updateFlow(scripting, absoluteFlowPath, {
+            // Non-null: guaranteed by the mode!=="read" guard above.
+            const result = await updateFlow(scripting, absoluteFlowPath!, {
                 flowId: values["flow-id"],
                 flowName: values["flow-name"],
                 flowType: values["flow-type"],
@@ -551,9 +675,53 @@ async function main(): Promise<void> {
         return;
     }
 
+    if (mode === "read") {
+        try {
+            const flowType = values["flow-type"];
+            if (!flowType) {
+                throw new Error(
+                    "flowType is required by the Architect Scripting SDK for both " +
+                        "loadFlowByFlowIdAsync and loadFlowByFlowNameAsync — provide it " +
+                        "even when identifying the flow by flowId.",
+                );
+            }
+            const result = await readFlow(scripting, {
+                flowId: values["flow-id"],
+                flowName: values["flow-name"],
+                flowType,
+                flowVersion: values["flow-version"],
+            });
+            emit("result", {
+                success: true,
+                flowId: result.flowId,
+                flowName: result.flowName,
+                content: result.content,
+                fileName: result.fileName,
+                truncated: result.truncated,
+            });
+        } catch (err) {
+            // No lock is ever acquired in this mode, so there's no
+            // `unlocked` state to track and no "unlock also failed" mode —
+            // unlike `mode === "update"` above.
+            const errorKind = classifyUpdateError(err);
+            const message = err instanceof Error ? err.message : String(err);
+            emit("result", {
+                success: false,
+                error: message,
+                errorKind,
+            });
+        } finally {
+            session.endExitCode = 0;
+            session.end();
+        }
+        return;
+    }
+
     try {
+        // Non-null: guaranteed by the mode!=="read" guard above (this is the
+        // "create" fallthrough, which also requires --flow-file).
         emit("log", "info", `Importing flow file: ${absoluteFlowPath}`);
-        const mod = await import(pathToFileURL(absoluteFlowPath).href);
+        const mod = await import(pathToFileURL(absoluteFlowPath!).href);
 
         if (typeof mod.buildFlow !== "function") {
             emit("result", {
