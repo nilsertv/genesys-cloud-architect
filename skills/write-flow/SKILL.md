@@ -145,3 +145,37 @@ Input: { "sessionId": "<session-id>", "message": "Billing" }
 ```
 
 Walk through the flow's conversation paths to verify the bot responds correctly. If the bot behaves unexpectedly, update the flow file, re-deploy, re-publish, and test again.
+
+## Reading an Existing Flow Before Editing It
+
+> **Branch-state note**: this section is deliberately standalone. The fuller
+> "Updating an Existing Flow" section (covering the `updateFlow` export and
+> the `update_flow` MCP tool) is documented on a separate branch
+> (`update-flow`'s Slice C docs, commit `f19d983`) that is not yet merged
+> into this branch — see `openspec/changes/read-flow/state.yaml`'s
+> branch-base notes. Once both branches converge, fold this guidance into
+> "Updating an Existing Flow", right after its step 2 ("Write the update
+> file").
+
+Before writing an `updateFlow` export against a flow that already exists in
+Genesys Cloud, call the `read_flow` MCP tool first to see the flow's actual
+current structure — states, tasks, variables, and actions, as full YAML.
+This is the exact problem that motivated building `read_flow` in the first
+place: without it, nobody could see what a flow really looked like before
+editing it, so `update_flow` bodies were being written against assumptions
+instead of the flow's real, deployed structure.
+
+```
+Tool: read_flow
+Input: { "flowId": "<existing-flow-id>", "flowType": "inboundcall" }
+```
+
+You must supply exactly one of `flowId` or `flowName` (`flowType` is always
+required for both). `read_flow` never checks out or locks the flow — call it
+freely, including while another edit is already in progress — and read the
+returned YAML before deciding what your `updateFlow` edits should actually
+change.
+
+See `references/sdk-patterns.md`'s "The `read_flow` Contract" section for
+the tool's full input/output shape, and `references/gotchas.md` for
+truncation behavior on large flows and `flowVersion` details.

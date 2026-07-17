@@ -39,6 +39,42 @@ export async function buildFlow(scripting: ArchitectScripting) {
 - The deploy runner handles authentication and session management
 - Return `await flow.checkInAsync()` — this saves the flow and returns the flow object, which the deploy runner uses to run `validateAsync()` and report validation warnings/errors
 
+## The `read_flow` Contract (reading an existing flow, read-only)
+
+Unlike `buildFlow`, there's no exported function to author for `read_flow` —
+it's a read-only MCP tool, not something a flow file wires up. Call it
+directly, before writing an `updateFlow` export, to see the flow's real
+current structure:
+
+```
+Tool: read_flow
+Input: {
+  "flowId": "<existing-flow-id>",   // or "flowName"
+  "flowType": "inboundcall",
+  "flowVersion": "latest"            // optional
+}
+```
+
+- Supply exactly one of `flowId` or `flowName` — `flowType` is always
+  required for both lookup paths (same requirement as an `update_flow`
+  checkout).
+- `flowVersion` is optional: `"latest"` (the SDK's own default when
+  omitted), a specific numeric commit-version as a string, `"debug"`, or
+  `"published"`. Not validated client-side — the SDK is the source of truth
+  for what's a valid value (see `gotchas.md` for what happens when
+  `"published"` doesn't exist yet).
+- Returns the flow's full definition as YAML text (states, tasks, variables,
+  actions) — the same shape you'd get exporting from the Architect UI.
+  `flowFormat` is intentionally NOT an exposed parameter: the tool always
+  requests `archEnums.FLOW_FORMAT_TYPES.yaml` internally. The SDK's other
+  export format (`architect`) is a semi-opaque backup/restore format with no
+  use case as LLM-readable context, so it was never exposed as a choice.
+- Never checks out or acquires a lock — safe to call at any time, including
+  while `update_flow` or another user already has the flow open in
+  Architect. There is no `unlockAsync()` path to worry about, because
+  `read_flow` never takes a lock to release.
+- Very large flows may come back truncated — see `gotchas.md`.
+
 ## Flow Creation Methods
 
 | Flow Type | Factory Method |
