@@ -4,6 +4,7 @@ import platformClient from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
 import { deployFlow } from "./tools/deploy-flow.ts";
 import { flowDependencies } from "./tools/flow-dependencies.ts";
+import { readFlow } from "./tools/read-flow.ts";
 import { testBotFlow } from "./tools/test-bot-flow.ts";
 import { updateFlow } from "./tools/update-flow.ts";
 
@@ -66,6 +67,14 @@ server.registerTool(
     updateFlowTool.config,
     updateFlowTool.handler,
 );
+
+const readFlowTool = readFlow({
+    region: envVars.GENESYS_REGION,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+    deployScriptPath: envVars.DEPLOY_SCRIPT_PATH,
+});
+server.registerTool("read_flow", readFlowTool.config, readFlowTool.handler);
 
 const testBotFlowTool = testBotFlow({
     textbotsApi: new platformClient.TextbotsApi(),

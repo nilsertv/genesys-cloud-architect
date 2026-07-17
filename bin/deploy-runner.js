@@ -116915,6 +116915,7 @@ ${e3.stack}`, n3 = [this].concat(i3);
 // src/deploy-runner/index.ts
 var index_exports = {};
 __export(index_exports, {
+  readFlow: () => readFlow,
   updateFlow: () => updateFlow
 });
 module.exports = __toCommonJS(index_exports);
@@ -116959,6 +116960,30 @@ async function applyUpdateAndSave(flow, mutate, publish) {
     carrier.unlocked = unlocked;
     throw carrier;
   }
+}
+function truncateContent(content, maxChars) {
+  if (maxChars <= 0) {
+    return { content: "", truncated: content.length > 0 };
+  }
+  if (content.length <= maxChars) {
+    return { content, truncated: false };
+  }
+  const marker = `
+
+# [TRUNCATED \u2014 original size ${content.length} chars, showing first ${maxChars}. Request a specific flowVersion or narrow the review to reduce size.]`;
+  return { content: content.slice(0, maxChars) + marker, truncated: true };
+}
+async function exportFlowContent(flow, flowFormat) {
+  let exported;
+  await flow.exportToObjectAsync((result) => {
+    exported = result;
+  }, flowFormat);
+  if (!exported) {
+    throw new Error(
+      "exportToObjectAsync completed without invoking its callback with export content."
+    );
+  }
+  return exported;
 }
 
 // src/deploy-runner/index.ts
@@ -117204,6 +117229,41 @@ async function updateFlow(scripting, absoluteFlowPath, opts) {
     flowName: flow.name
   };
 }
+var MAX_YAML_CHARS = 2e5;
+async function readFlow(scripting, opts) {
+  const identifier = resolveFlowIdentifier(opts);
+  const { archFactoryFlows } = scripting.factories;
+  const { archEnums } = scripting.enums;
+  emit(
+    "log",
+    "info",
+    identifier.kind === "byId" ? `Loading flow by id (no lock): ${identifier.flowId}` : `Loading flow by name (no lock): ${identifier.flowName} (${identifier.flowType})`
+  );
+  const flow = identifier.kind === "byId" ? await archFactoryFlows.loadFlowByFlowIdAsync(
+    identifier.flowId,
+    opts.flowType,
+    opts.flowVersion
+  ) : await archFactoryFlows.loadFlowByFlowNameAsync(
+    identifier.flowName,
+    identifier.flowType,
+    opts.flowVersion
+  );
+  const exported = await exportFlowContent(
+    flow,
+    archEnums.FLOW_FORMAT_TYPES.yaml
+  );
+  const { content, truncated } = truncateContent(
+    exported.content,
+    MAX_YAML_CHARS
+  );
+  return {
+    flowId: flow.id,
+    flowName: flow.name,
+    content,
+    fileName: exported.fileName,
+    truncated
+  };
+}
 async function main() {
   const timer = setTimeout(() => {
     emit("result", {
@@ -117220,6 +117280,7 @@ async function main() {
       "flow-id": { type: "string" },
       "flow-name": { type: "string" },
       "flow-type": { type: "string" },
+      "flow-version": { type: "string" },
       "force-unlock": { type: "boolean", default: false },
       publish: { type: "boolean", default: false }
     },
@@ -117227,22 +117288,22 @@ async function main() {
   });
   const flowFile = values["flow-file"];
   const rawMode = values.mode;
-  if (rawMode !== void 0 && rawMode !== "create" && rawMode !== "update") {
+  if (rawMode !== void 0 && rawMode !== "create" && rawMode !== "update" && rawMode !== "read") {
     emit("result", {
       success: false,
-      error: `Invalid --mode "${rawMode}". Must be "create" or "update".`
+      error: `Invalid --mode "${rawMode}". Must be "create", "update", or "read".`
     });
     process.exit(1);
   }
-  const mode = rawMode === "update" ? "update" : "create";
-  if (!flowFile) {
+  const mode = rawMode === "update" ? "update" : rawMode === "read" ? "read" : "create";
+  if (mode !== "read" && !flowFile) {
     emit("result", {
       success: false,
       error: "Missing --flow-file argument"
     });
     process.exit(1);
   }
-  const absoluteFlowPath = import_node_path.default.resolve(flowFile);
+  const absoluteFlowPath = flowFile ? import_node_path.default.resolve(flowFile) : void 0;
   const region = process.env.GENESYS_REGION;
   const clientId = process.env.GENESYS_CLIENT_ID;
   const clientSecret = process.env.GENESYS_CLIENT_SECRET;
@@ -117292,6 +117353,42 @@ async function main() {
         success: false,
         error: message,
         unlocked,
+        errorKind
+      });
+    } finally {
+      session.endExitCode = 0;
+      session.end();
+    }
+    return;
+  }
+  if (mode === "read") {
+    try {
+      const flowType = values["flow-type"];
+      if (!flowType) {
+        throw new Error(
+          "flowType is required by the Architect Scripting SDK for both loadFlowByFlowIdAsync and loadFlowByFlowNameAsync \u2014 provide it even when identifying the flow by flowId."
+        );
+      }
+      const result = await readFlow(scripting, {
+        flowId: values["flow-id"],
+        flowName: values["flow-name"],
+        flowType,
+        flowVersion: values["flow-version"]
+      });
+      emit("result", {
+        success: true,
+        flowId: result.flowId,
+        flowName: result.flowName,
+        content: result.content,
+        fileName: result.fileName,
+        truncated: result.truncated
+      });
+    } catch (err) {
+      const errorKind = classifyUpdateError(err);
+      const message = err instanceof Error ? err.message : String(err);
+      emit("result", {
+        success: false,
+        error: message,
         errorKind
       });
     } finally {
@@ -117365,6 +117462,7 @@ main().then(() => process.exit(0)).catch((err) => {
 });
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  readFlow,
   updateFlow
 });
 /*! Bundled license information:

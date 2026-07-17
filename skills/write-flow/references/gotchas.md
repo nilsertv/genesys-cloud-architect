@@ -146,3 +146,15 @@ The SDK auto-resolves the Home division during session startup and sets it on `f
 ## Reusable tasks and jumpToTask
 
 `archFactoryTasks.addTask(flow, name)` creates a reusable task on any flow extending `ArchBaseFlowWorkflow` (includes digital bot flows). For circular references (task A → task B → A), create all tasks as empty shells upfront, then populate them with actions afterward.
+
+## `read_flow` truncates very large YAML exports
+
+`read_flow` caps the exported YAML at `MAX_YAML_CHARS = 200_000` characters (~50k tokens at ~4 chars/token — a conservative starting estimate, see `openspec/changes/read-flow/design.md`'s Open Questions). If the real export exceeds that limit, the tool truncates the text and appends an explicit marker (`[TRUNCATED — original size N chars, showing first 200000. Request a specific flowVersion or narrow the review to reduce size.]`), and the underlying result carries `truncated: true`. Against the real "Calidda" org's disposable test flow, a full export was only 2297 characters — well under the limit — so this constant remains unvalidated against a large, real-world flow; treat it as provisional and expect it may need tuning.
+
+## `read_flow`'s `flowVersion` values, and `"published"` on an unpublished flow
+
+`flowVersion` is optional and not validated client-side — the SDK is the source of truth. Confirmed accepted values: `"latest"` (the SDK's own default when the argument is omitted), a specific commit-version number as a string, `"debug"`, and `"published"`.
+
+**`flowVersion: "published"` against a flow that was never published fails loudly — empirically confirmed end-to-end through the real `read_flow` MCP tool**, not just the underlying deploy-runner: the SDK returns an explicit HTTP 404, `"Flow '<name>' version 'published' is missing. (not.found)"`, rather than silently falling back to the latest or debug version. Don't assume `flowVersion: "published"` always returns something — check for this error whenever the flow in question might not have a published version yet.
+
+That error message is currently classified as `errorKind: "unknown"`, NOT `"not-found"`, even though the raw text ends in `(not.found)`. `read_flow` reuses `update_flow`'s `classifyUpdateError()` unchanged, and its regex (`not[\s-]?found`) does not match the literal `(not.found)` (a dot, not a space or hyphen) that this specific SDK error uses. This is a known, documented classification gap — not something to silently work around in your own code — so callers should not rely on `errorKind` alone to detect this case; check the raw error text for `"version '...' is missing"` if you need to distinguish it from a generic not-found.

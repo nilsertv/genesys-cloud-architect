@@ -177,6 +177,30 @@ export async function updateFlow(scripting: ArchitectScripting, flow: unknown): 
 }
 ```
 
+#### Read the flow's current structure first
+
+Before writing your `updateFlow` edits, call the `read_flow` MCP tool to see
+the flow's actual current structure — states, tasks, variables, and actions,
+as full YAML. This is the exact problem that motivated building `read_flow`
+in the first place: without it, nobody could see what a flow really looked
+like before editing it, so `update_flow` bodies were being written against
+assumptions instead of the flow's real, deployed structure.
+
+```
+Tool: read_flow
+Input: { "flowId": "<existing-flow-id>", "flowType": "inboundcall" }
+```
+
+You must supply exactly one of `flowId` or `flowName` (`flowType` is always
+required for both). `read_flow` never checks out or locks the flow — call it
+freely, including while another edit is already in progress — and read the
+returned YAML before deciding what your `updateFlow` edits should actually
+change.
+
+See `references/sdk-patterns.md`'s "The `read_flow` Contract" section for
+the tool's full input/output shape, and `references/gotchas.md` for
+truncation behavior on large flows and `flowVersion` details.
+
 **Rules:**
 - The function receives the SDK **and the already-checked-out flow object** — it does not create a flow itself
 - `updateFlow` is edits-only: never call `flow.checkInAsync()` or `flow.publishAsync()` inside it — the tool owns that step so it can guarantee the flow is unlocked on failure

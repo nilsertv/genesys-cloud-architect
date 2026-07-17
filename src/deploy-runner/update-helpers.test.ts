@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
 import {
     applyUpdateAndSave,
+    type ExportableFlow,
+    exportFlowContent,
     resolveFlowIdentifier,
+    truncateContent,
     type UpdatableFlow,
 } from "./update-helpers.ts";
 
@@ -164,5 +167,76 @@ describe("applyUpdateAndSave", () => {
         assert.equal(callCount(flow.publishAsync), 1);
         assert.equal(callCount(flow.checkInAsync), 0);
         assert.equal(callCount(flow.unlockAsync), 0);
+    });
+});
+
+describe("truncateContent", () => {
+    it("returns the content unchanged when under the limit", () => {
+        const result = truncateContent("hello", 10);
+        assert.deepEqual(result, { content: "hello", truncated: false });
+    });
+
+    it("returns the content unchanged when exactly at the limit", () => {
+        const result = truncateContent("hello", 5);
+        assert.deepEqual(result, { content: "hello", truncated: false });
+    });
+
+    it("truncates and appends a marker when over the limit", () => {
+        const content = "0123456789";
+        const result = truncateContent(content, 5);
+
+        assert.equal(result.truncated, true);
+        assert.ok(result.content.startsWith("01234"));
+        assert.match(
+            result.content,
+            /\[TRUNCATED — original size 10 chars, showing first 5\./,
+        );
+    });
+
+    it("returns empty content for a non-positive maxChars, marked truncated", () => {
+        assert.deepEqual(truncateContent("hello", 0), {
+            content: "",
+            truncated: true,
+        });
+        assert.deepEqual(truncateContent("hello", -5), {
+            content: "",
+            truncated: true,
+        });
+    });
+
+    it("is not truncated when both content and maxChars are empty/zero", () => {
+        assert.deepEqual(truncateContent("", 0), {
+            content: "",
+            truncated: false,
+        });
+    });
+});
+
+describe("exportFlowContent", () => {
+    it("resolves with the callback's payload, not the awaited return value", async () => {
+        const fakeFlow: ExportableFlow = {
+            exportToObjectAsync: mock.fn(async (cb) => {
+                cb({ content: "flow: yaml", fileName: "flow.yaml" });
+                return undefined; // mirrors the real SDK's confirmed quirk
+            }),
+        };
+
+        const result = await exportFlowContent(fakeFlow, "yaml");
+
+        assert.deepEqual(result, {
+            content: "flow: yaml",
+            fileName: "flow.yaml",
+        });
+    });
+
+    it("throws if the callback is never invoked", async () => {
+        const fakeFlow: ExportableFlow = {
+            exportToObjectAsync: mock.fn(async () => undefined),
+        };
+
+        await assert.rejects(
+            () => exportFlowContent(fakeFlow, "yaml"),
+            /completed without invoking its callback/,
+        );
     });
 });
