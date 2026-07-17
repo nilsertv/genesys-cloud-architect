@@ -15,7 +15,7 @@ server and the deploy-runner process.
 
 `update_flow` MUST accept either `flowId` alone or the pair
 `flowName` + `flowType`, and MUST reject any other combination via
-zod `.refine()` before spawning the deploy-runner process.
+input validation before spawning the deploy-runner process.
 
 #### Scenario: Resolve by flowId
 - GIVEN a caller supplies `flowId`
@@ -30,12 +30,12 @@ zod `.refine()` before spawning the deploy-runner process.
 #### Scenario: Missing identifier
 - GIVEN neither `flowId` nor both `flowName`+`flowType` are supplied
 - WHEN input is validated
-- THEN the `.refine()` MUST fail and no process MUST be spawned
+- THEN the validation MUST fail and no process MUST be spawned
 
 #### Scenario: Ambiguous identifier
 - GIVEN both `flowId` and `flowName` are supplied
 - WHEN input is validated
-- THEN the `.refine()` MUST fail and no process MUST be spawned
+- THEN the validation MUST fail and no process MUST be spawned
 
 ### Requirement: Non-Destructive Update Workflow
 

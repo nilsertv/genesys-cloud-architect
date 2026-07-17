@@ -94,6 +94,7 @@ sequenceDiagram
     Runner->>SDK: checkoutAndLoadFlowBy...Async
     SDK-->>Runner: flow (checked out, locked)
     Runner->>File: mod.updateFlow(scripting, flow)
+    File->>SDK: mutate flow (edits only)
     File-->>Runner: resolves (mutation itself succeeded)
     Runner->>SDK: flow.checkInAsync() / publishAsync()
     SDK-->>Runner: throws (validation/permission/etc.)

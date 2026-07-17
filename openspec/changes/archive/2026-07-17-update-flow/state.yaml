@@ -8,19 +8,19 @@ chain_strategy: stacked-to-main
 phases:
   explore:
     status: done
-    artifact: openspec/changes/update-flow/exploration.md
+    artifact: openspec/changes/archive/2026-07-17-update-flow/exploration.md
   proposal:
     status: done
-    artifact: openspec/changes/update-flow/proposal.md
+    artifact: openspec/changes/archive/2026-07-17-update-flow/proposal.md
   specs:
     status: done
-    artifact: openspec/changes/update-flow/specs/update-flow/spec.md
+    artifact: openspec/changes/archive/2026-07-17-update-flow/specs/update-flow/spec.md
   design:
     status: done
-    artifact: openspec/changes/update-flow/design.md
+    artifact: openspec/changes/archive/2026-07-17-update-flow/design.md
   tasks:
     status: done
-    artifact: openspec/changes/update-flow/tasks.md
+    artifact: openspec/changes/archive/2026-07-17-update-flow/tasks.md
   apply:
     status: partial
     note: >
@@ -77,7 +77,7 @@ phases:
       default trigger set, only opened/synchronize/reopened are).
   verify:
     status: done
-    artifact: openspec/changes/update-flow/verify-report.md
+    artifact: openspec/changes/archive/2026-07-17-update-flow/verify-report.md
     note: >
       PASS WITH WARNINGS. Verified against real main (HEAD 121d7eb), not
       feature branches (already deleted/merged). pnpm test 26/26 green, tsc
@@ -118,8 +118,8 @@ phases:
       read_flow's registration after update_flow's) only added lines and
       touched nothing in update_flow's block.
   archive:
-    status: pending
-    note: "Verify passed (see verify.note) — ready for sdd-archive."
+    status: done
+    note: "Archived 2026-07-17. Spec synced to openspec/specs/update-flow/, all artifacts moved to archive/2026-07-17-update-flow/."
 
 open_decisions:
   - id: tool-surface
