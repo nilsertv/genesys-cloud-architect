@@ -4,6 +4,7 @@ import platformClient from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
 import { deployFlow } from "./tools/deploy-flow.ts";
 import { flowDependencies } from "./tools/flow-dependencies.ts";
+import { readFlow } from "./tools/read-flow.ts";
 import { testBotFlow } from "./tools/test-bot-flow.ts";
 
 const envResults = z
@@ -62,6 +63,20 @@ server.registerTool(
     testBotFlowTool.config,
     testBotFlowTool.handler,
 );
+
+// design.md specifies registering read_flow immediately after update_flow,
+// but update_flow (openspec/changes/update-flow Slice B) is not present on
+// this branch — feat/read-flow-slice-a only depends on Slice A (deploy-runner
+// core), per state.yaml's branch-base correction. Registered here, after the
+// other read-only/non-destructive tools, as the closest available anchor;
+// re-order next to update_flow once both branches are combined.
+const readFlowTool = readFlow({
+    region: envVars.GENESYS_REGION,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+    deployScriptPath: envVars.DEPLOY_SCRIPT_PATH,
+});
+server.registerTool("read_flow", readFlowTool.config, readFlowTool.handler);
 
 void (async () => {
     if (envVars.PREVENT_LOGIN) {
