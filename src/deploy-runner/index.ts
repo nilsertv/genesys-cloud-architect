@@ -6,10 +6,34 @@ import https from "node:https";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { applyUpdateAndSave, resolveFlowIdentifier } from "./update-helpers.ts";
 
 const TIMEOUT_MS = 90_000;
 
 type LogLevel = "info" | "warn" | "error";
+
+// "not-found" is empirically confirmed (tasks.md 1.6/2.6, real Genesys Cloud
+// org): both checkoutAndLoadFlowByFlowIdAsync's 404
+// ("Could not find flow with specified ID. (architect.flow.not.found)") and
+// checkoutAndLoadFlowByFlowNameAsync's "no matches" are covered below.
+//
+// "type-mismatch" is kept in this union for API completeness but is NOT
+// reachable in practice, confirmed empirically: (1) on the flowId path,
+// checkoutAndLoadFlowByFlowIdAsync does not enforce flowType at all — a
+// valid flowId with an unrelated flowType still succeeds; (2) on the
+// flowName path, a name that exists under a different type produces the
+// exact same "no matches" response as a name that doesn't exist at all —
+// the SDK gives no signal to distinguish "wrong type" from "not found".
+// classifyUpdateError() therefore folds both into "not-found" below.
+//
+// "locked-by-other-user" remains a provisional guess — not empirically
+// confirmed (requires a second real user/OAuth identity to hold a
+// conflicting lock, which was out of scope for solo verification).
+export type UpdateErrorKind =
+    | "locked-by-other-user"
+    | "not-found"
+    | "type-mismatch"
+    | "unknown";
 
 function emit(type: "log", level: LogLevel, message: string): void;
 function emit(
@@ -20,6 +44,8 @@ function emit(
         flowName?: string;
         warnings?: string[];
         error?: string;
+        unlocked?: boolean;
+        errorKind?: UpdateErrorKind;
     },
 ): void;
 function emit(type: string, ...args: unknown[]): void {
@@ -294,6 +320,118 @@ function toArchitectSdkRegion(
     return undefined;
 }
 
+// ── Update flow (edit-in-place) ─────────────────────────────────────────
+
+/**
+ * Error classifier — see UpdateErrorKind's doc comment for what's empirically
+ * confirmed vs. still provisional.
+ */
+function classifyUpdateError(err: unknown): UpdateErrorKind {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/locked/i.test(message)) return "locked-by-other-user";
+    // Empirically captured SDK text, real Genesys Cloud org:
+    //   by id:   "Could not find flow with specified ID. (architect.flow.not.found)"
+    //   by name: "no matches" (also covers the unreachable type-mismatch case)
+    if (
+        /could not find|not[\s-]?found|does not exist|architect\.flow\.not\.found|no matches/i.test(
+            message,
+        )
+    )
+        return "not-found";
+    return "unknown";
+}
+
+/**
+ * Checks out an existing flow, applies the user flow file's edits-only
+ * `updateFlow(scripting, flow)` export, and checks in or publishes it —
+ * never calling createFlow<Type>Async or any delete-and-recreate route.
+ *
+ * NOTE — deviations from design.md's contract, discovered by reading the
+ * installed SDK's types.d.ts (purecloud-flow-scripting-api-sdk-javascript):
+ *   1. `flowType` is REQUIRED by both `checkoutAndLoadFlowByFlowIdAsync` and
+ *      `checkoutAndLoadFlowByFlowNameAsync` — the SDK has no id-only lookup.
+ *      This applies even on the FlowIdentifier "byId" branch, which design.md
+ *      models without a flowType field. Callers must supply `opts.flowType`
+ *      regardless of whether they identify the flow by id or by name+type.
+ *
+ * The user flow file is imported and validated (must export a function named
+ * `updateFlow`) BEFORE the flow is checked out. This is deliberate: checkout
+ * acquires a lock on the live flow, and `applyUpdateAndSave` is the only
+ * function that guarantees `unlockAsync()` runs on failure. If the import
+ * happened after checkout, a broken flow file (syntax error, missing file,
+ * missing export) would leave the flow locked with nothing to release it —
+ * an orphaned lock. Importing first means checkout is never reached unless
+ * the flow file is already known-good, so no lock is ever taken that isn't
+ * released.
+ */
+export async function updateFlow(
+    scripting: ArchitectScripting,
+    absoluteFlowPath: string,
+    opts: {
+        flowId?: string;
+        flowName?: string;
+        flowType?: string;
+        forceUnlock?: boolean;
+        publish?: boolean;
+    },
+): Promise<{ flowId: string; flowName: string }> {
+    const identifier = resolveFlowIdentifier(opts);
+
+    const flowType = opts.flowType;
+    if (!flowType) {
+        throw new Error(
+            "flowType is required by the Architect Scripting SDK for both " +
+                "checkoutAndLoadFlowByFlowIdAsync and checkoutAndLoadFlowByFlowNameAsync " +
+                "— provide it even when identifying the flow by flowId.",
+        );
+    }
+
+    emit("log", "info", `Importing flow file: ${absoluteFlowPath}`);
+    const mod = await import(pathToFileURL(absoluteFlowPath).href);
+
+    if (typeof mod.updateFlow !== "function") {
+        throw new Error(
+            `Flow file does not export an updateFlow function: ${absoluteFlowPath}`,
+        );
+    }
+
+    const forceUnlock = opts.forceUnlock ?? false;
+    const { archFactoryFlows } = scripting.factories;
+
+    emit(
+        "log",
+        "info",
+        identifier.kind === "byId"
+            ? `Checking out flow by id: ${identifier.flowId}`
+            : `Checking out flow by name: ${identifier.flowName} (${identifier.flowType})`,
+    );
+
+    const flow =
+        identifier.kind === "byId"
+            ? await archFactoryFlows.checkoutAndLoadFlowByFlowIdAsync(
+                  identifier.flowId,
+                  flowType,
+                  forceUnlock,
+              )
+            : await archFactoryFlows.checkoutAndLoadFlowByFlowNameAsync(
+                  identifier.flowName,
+                  identifier.flowType,
+                  forceUnlock,
+              );
+
+    const publish = opts.publish ?? false;
+    await applyUpdateAndSave(
+        flow,
+        (f) => mod.updateFlow(scripting, f),
+        publish,
+    );
+
+    return {
+        flowId: flow.id,
+        flowName: flow.name,
+    };
+}
+
 // ── Main ───────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -309,11 +447,33 @@ async function main(): Promise<void> {
     const { values } = parseArgs({
         options: {
             "flow-file": { type: "string" },
+            mode: { type: "string" },
+            "flow-id": { type: "string" },
+            "flow-name": { type: "string" },
+            "flow-type": { type: "string" },
+            "force-unlock": { type: "boolean", default: false },
+            publish: { type: "boolean", default: false },
         },
         strict: true,
     });
 
     const flowFile = values["flow-file"];
+
+    // Default (no --mode given) is "create" — the historical `deploy_flow`
+    // behavior, preserved for backward compatibility. But if --mode IS given
+    // and is neither "create" nor "update", fail loudly rather than silently
+    // falling back to "create" — that fallback is the MOST destructive path
+    // (delete-and-recreate), so a typo like "--mode updte" must never be
+    // allowed to trigger it silently.
+    const rawMode = values.mode;
+    if (rawMode !== undefined && rawMode !== "create" && rawMode !== "update") {
+        emit("result", {
+            success: false,
+            error: `Invalid --mode "${rawMode}". Must be "create" or "update".`,
+        });
+        process.exit(1);
+    }
+    const mode = rawMode === "update" ? "update" : "create";
 
     if (!flowFile) {
         emit("result", {
@@ -358,6 +518,38 @@ async function main(): Promise<void> {
         clientId,
         clientSecret,
     });
+
+    if (mode === "update") {
+        try {
+            const result = await updateFlow(scripting, absoluteFlowPath, {
+                flowId: values["flow-id"],
+                flowName: values["flow-name"],
+                flowType: values["flow-type"],
+                forceUnlock: values["force-unlock"],
+                publish: values.publish,
+            });
+            emit("result", {
+                success: true,
+                flowId: result.flowId,
+                flowName: result.flowName,
+            });
+        } catch (err) {
+            const unlocked = (err as { unlocked?: boolean } | undefined)
+                ?.unlocked;
+            const errorKind = classifyUpdateError(err);
+            const message = err instanceof Error ? err.message : String(err);
+            emit("result", {
+                success: false,
+                error: message,
+                unlocked,
+                errorKind,
+            });
+        } finally {
+            session.endExitCode = 0;
+            session.end();
+        }
+        return;
+    }
 
     try {
         emit("log", "info", `Importing flow file: ${absoluteFlowPath}`);

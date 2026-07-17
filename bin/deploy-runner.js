@@ -16,6 +16,10 @@ var __esm = (fn, res) => function __init() {
 var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -32,6 +36,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // require("./**/*") in node_modules/.pnpm/purecloud-flow-scripting-api-sdk-javascript@0.66.1/node_modules/purecloud-flow-scripting-api-sdk-javascript/build-scripting/release/scripting.bundle.js
 var globRequire;
@@ -116908,10 +116913,55 @@ ${e3.stack}`, n3 = [this].concat(i3);
 });
 
 // src/deploy-runner/index.ts
+var index_exports = {};
+__export(index_exports, {
+  updateFlow: () => updateFlow
+});
+module.exports = __toCommonJS(index_exports);
 var import_node_https = __toESM(require("node:https"));
 var import_node_path = __toESM(require("node:path"));
 var import_node_url = require("node:url");
 var import_node_util = require("node:util");
+
+// src/deploy-runner/update-helpers.ts
+function resolveFlowIdentifier(opts) {
+  if (opts.flowId) {
+    return { kind: "byId", flowId: opts.flowId };
+  }
+  if (opts.flowName && opts.flowType) {
+    return {
+      kind: "byName",
+      flowName: opts.flowName,
+      flowType: opts.flowType
+    };
+  }
+  throw new Error(
+    "Must provide either flowId, or flowName together with flowType."
+  );
+}
+async function applyUpdateAndSave(flow, mutate, publish) {
+  try {
+    await mutate(flow);
+    if (publish) {
+      await flow.publishAsync();
+    } else {
+      await flow.checkInAsync();
+    }
+    return { unlocked: false };
+  } catch (originalError) {
+    let unlocked = true;
+    try {
+      await flow.unlockAsync();
+    } catch {
+      unlocked = false;
+    }
+    const carrier = originalError && typeof originalError === "object" ? originalError : new Error(String(originalError), { cause: originalError });
+    carrier.unlocked = unlocked;
+    throw carrier;
+  }
+}
+
+// src/deploy-runner/index.ts
 var TIMEOUT_MS = 9e4;
 function emit(type, ...args) {
   if (type === "log") {
@@ -117103,6 +117153,57 @@ function toArchitectSdkRegion(scripting, apiDomain) {
   if (Object.values(locations).includes(apiDomain)) return apiDomain;
   return void 0;
 }
+function classifyUpdateError(err) {
+  const message = err instanceof Error ? err.message : String(err);
+  if (/locked/i.test(message)) return "locked-by-other-user";
+  if (/could not find|not[\s-]?found|does not exist|architect\.flow\.not\.found|no matches/i.test(
+    message
+  ))
+    return "not-found";
+  return "unknown";
+}
+async function updateFlow(scripting, absoluteFlowPath, opts) {
+  const identifier = resolveFlowIdentifier(opts);
+  const flowType = opts.flowType;
+  if (!flowType) {
+    throw new Error(
+      "flowType is required by the Architect Scripting SDK for both checkoutAndLoadFlowByFlowIdAsync and checkoutAndLoadFlowByFlowNameAsync \u2014 provide it even when identifying the flow by flowId."
+    );
+  }
+  emit("log", "info", `Importing flow file: ${absoluteFlowPath}`);
+  const mod = await import((0, import_node_url.pathToFileURL)(absoluteFlowPath).href);
+  if (typeof mod.updateFlow !== "function") {
+    throw new Error(
+      `Flow file does not export an updateFlow function: ${absoluteFlowPath}`
+    );
+  }
+  const forceUnlock = opts.forceUnlock ?? false;
+  const { archFactoryFlows } = scripting.factories;
+  emit(
+    "log",
+    "info",
+    identifier.kind === "byId" ? `Checking out flow by id: ${identifier.flowId}` : `Checking out flow by name: ${identifier.flowName} (${identifier.flowType})`
+  );
+  const flow = identifier.kind === "byId" ? await archFactoryFlows.checkoutAndLoadFlowByFlowIdAsync(
+    identifier.flowId,
+    flowType,
+    forceUnlock
+  ) : await archFactoryFlows.checkoutAndLoadFlowByFlowNameAsync(
+    identifier.flowName,
+    identifier.flowType,
+    forceUnlock
+  );
+  const publish = opts.publish ?? false;
+  await applyUpdateAndSave(
+    flow,
+    (f) => mod.updateFlow(scripting, f),
+    publish
+  );
+  return {
+    flowId: flow.id,
+    flowName: flow.name
+  };
+}
 async function main() {
   const timer = setTimeout(() => {
     emit("result", {
@@ -117114,11 +117215,26 @@ async function main() {
   timer.unref();
   const { values } = (0, import_node_util.parseArgs)({
     options: {
-      "flow-file": { type: "string" }
+      "flow-file": { type: "string" },
+      mode: { type: "string" },
+      "flow-id": { type: "string" },
+      "flow-name": { type: "string" },
+      "flow-type": { type: "string" },
+      "force-unlock": { type: "boolean", default: false },
+      publish: { type: "boolean", default: false }
     },
     strict: true
   });
   const flowFile = values["flow-file"];
+  const rawMode = values.mode;
+  if (rawMode !== void 0 && rawMode !== "create" && rawMode !== "update") {
+    emit("result", {
+      success: false,
+      error: `Invalid --mode "${rawMode}". Must be "create" or "update".`
+    });
+    process.exit(1);
+  }
+  const mode = rawMode === "update" ? "update" : "create";
   if (!flowFile) {
     emit("result", {
       success: false,
@@ -117154,6 +117270,36 @@ async function main() {
     clientId,
     clientSecret
   });
+  if (mode === "update") {
+    try {
+      const result = await updateFlow(scripting, absoluteFlowPath, {
+        flowId: values["flow-id"],
+        flowName: values["flow-name"],
+        flowType: values["flow-type"],
+        forceUnlock: values["force-unlock"],
+        publish: values.publish
+      });
+      emit("result", {
+        success: true,
+        flowId: result.flowId,
+        flowName: result.flowName
+      });
+    } catch (err) {
+      const unlocked = err?.unlocked;
+      const errorKind = classifyUpdateError(err);
+      const message = err instanceof Error ? err.message : String(err);
+      emit("result", {
+        success: false,
+        error: message,
+        unlocked,
+        errorKind
+      });
+    } finally {
+      session.endExitCode = 0;
+      session.end();
+    }
+    return;
+  }
   try {
     emit("log", "info", `Importing flow file: ${absoluteFlowPath}`);
     const mod = await import((0, import_node_url.pathToFileURL)(absoluteFlowPath).href);
@@ -117216,6 +117362,10 @@ main().then(() => process.exit(0)).catch((err) => {
     error: `Unhandled error: ${err instanceof Error ? err.message : String(err)}`
   });
   process.exit(1);
+});
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  updateFlow
 });
 /*! Bundled license information:
 
