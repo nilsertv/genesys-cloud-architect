@@ -173,8 +173,84 @@ phases:
 
       All 3 slices of read-flow (Phase 1 core, Phase 2 tool MCP, Phase 3
       docs+verification) are now complete on feat/read-flow-slice-a.
+
+      Post-verify gap closure (sdd-apply, same session as the sdd-verify
+      pass below, task 3.5 added to tasks.md): the 1 CRITICAL + 2 WARNING
+      empirical gaps sdd-verify found were closed with 5 additional
+      read_flow calls against the real "Calidda" org, same disposable flow
+      (ZZZ-SDD-Test-DoNotUse-UpdateFlow, flowId
+      69cd3550-0848-4fd7-a5c7-4be615b20ced), invoked via the actual tool
+      handler (readFlow(toolConfig).handler(...) imported from
+      src/mcp-server/tools/read-flow.ts, spawning a freshly rebuilt
+      bin/deploy-runner.js — same end-to-end pattern as task 3.4, no
+      deploy-runner bypass). None of these 5 calls used --mode update, so
+      unlike 1.6/3.4 this round left the flow's internal version number
+      unchanged. Findings: (1) CRITICAL — flowName + wrong flowType
+      ("outboundcall" instead of "inboundcall") confirmed to fold into
+      errorKind:"not-found", exactly as spec.md anticipated by analogy with
+      update_flow; (2) WARNING — flowName + correct flowType confirmed to
+      return byte-identical YAML via the real loadFlowByFlowNameAsync code
+      path, previously only unit-tested at the resolveFlowIdentifier level;
+      (3) WARNING — flowVersion:"debug" was exercised for the first time
+      (failed with an explicit SDK 404, "version 'debug' is missing.
+      (not.found)" — this test flow never had an active debug session, a
+      real finding not a code bug) and flowVersion:"3.0" (an explicit
+      numeric version taken from the flow's own previously-observed
+      fileName, not invented) succeeded with identical YAML, closing the
+      last untested branch of the "Default and valid explicit versions"
+      scenario. No production code changes were needed — all 3 findings
+      confirmed expected/anticipated behavior. specs/read-flow/spec.md
+      updated: the "flowType mismatch" scenario no longer says "(unverified)"
+      and the "Default and valid explicit versions" scenario now documents
+      the confirmed evidence for all 4 flowVersion values (2 full success,
+      2 confirmed-failure-only because this specific disposable flow has
+      no published/debug version to succeed against). tasks.md 1.2's stale
+      "16 tests" note was also corrected to reflect the file's real current
+      count (20) as a cosmetic, non-blocking fix (SDD-verify SUGGESTION).
   verify:
-    status: pending
+    status: done
+    artifact: openspec/changes/read-flow/verify-report.md
+    note: >
+      PASS WITH WARNINGS. 14/14 tasks genuinely implemented (verified against
+      code, not just checkbox state). pnpm test 26/26 green, tsc --noEmit 0
+      errors, lint clean, build clean. Note: spec.md actually has 7
+      Requirements / 12 Scenarios (grep-counted), not 8/15 as assumed going
+      in. 10/12 scenarios COMPLIANT with real test/empirical evidence.
+
+      1 CRITICAL: the "flowType mismatch" scenario (Flow Not Found Handling)
+      has spec.md's own explicit MUST-verify language ("MUST be confirmed
+      empirically during sdd-apply, not assumed") but no empirical evidence
+      exists in tasks.md 1.6/3.4 of a flowName+wrong-flowType call — both
+      empirical rounds used --flow-id exclusively. Unlike
+      architect-flow-view-permission (honestly left confirmed:false with a
+      documented reason), this gap is not surfaced anywhere as still-open.
+
+      2 WARNING: (a) "Resolve by flowName and flowType" scenario — the
+      readFlow() -> loadFlowByFlowNameAsync code path was never exercised by
+      any test or empirical run, only resolveFlowIdentifier's pure byName
+      branch is unit-tested; (b) "Default and valid explicit versions"
+      scenario — only omitted/"latest" (success) and "published" (failure
+      branch only) were empirically confirmed; "debug" and an explicit
+      numeric commit-version were never tested in either branch.
+
+      1 SUGGESTION (cosmetic, non-blocking): tasks.md 1.2's test count ("16
+      tests") is stale relative to the file's current 20 tests after 2.4's
+      b218a57 additions; 2.4/3.4's rollup (20+6=26) is accurate and matches
+      the real pnpm test run.
+
+      All 3 previously-known design.md deviations (exportToObjectAsync
+      callback quirk, open flowVersion validation, post-test_bot_flow
+      registration) confirmed correctly reflected in code. spec.md/design.md
+      .refine() contradiction (commit b2e1005) confirmed genuinely fixed, no
+      other artifact contradictions found. All 5 state.yaml open_decisions
+      confirmed to match actual implementation, including
+      architect-flow-view-permission's honest confirmed:false.
+
+      Recommendation before archive: close the CRITICAL + 2 WARNINGs with
+      ~3-4 additional empirical calls against the same disposable test flow
+      (ZZZ-SDD-Test-DoNotUse-UpdateFlow) rather than a full sdd-apply re-run:
+      flowName+wrong-flowType, flowName+correct-flowType,
+      --flow-version debug, --flow-version <explicit number>.
   archive:
     status: pending
 

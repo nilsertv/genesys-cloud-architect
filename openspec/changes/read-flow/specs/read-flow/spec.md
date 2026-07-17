@@ -65,11 +65,16 @@ error-collapsing anti-pattern).
 - WHEN `read_flow` attempts to load it
 - THEN it MUST fail with "flow not found", distinct from validation/unknown errors
 
-#### Scenario: flowType mismatch (unverified — expected fold into not-found)
+#### Scenario: flowType mismatch (confirmed — folds into not-found)
 - GIVEN `flowName`+`flowType` where the name exists under a different type
-- WHEN `read_flow` attempts to load it
-- THEN behavior for `loadFlowBy...Async` is UNVERIFIED; by analogy with `update_flow`'s confirmed finding for `checkoutAndLoadFlowBy...Async` (mismatch indistinguishable from "no matches"), this is EXPECTED to fold into "not found"
-- AND MUST be confirmed empirically during `sdd-apply`, not assumed
+- WHEN `read_flow` attempts to load it via `loadFlowBy...Async`
+- THEN it MUST behave the same as "flow not found" — CONFIRMED empirically
+  (real "Calidda" org, `flowName: "ZZZ-SDD-Test-DoNotUse-UpdateFlow"` +
+  `flowType: "outboundcall"` instead of the real `"inboundcall"` returned
+  `errorKind: "not-found"`, the same mapped message as a nonexistent flow),
+  matching `update_flow`'s confirmed finding for
+  `checkoutAndLoadFlowBy...Async` (mismatch indistinguishable from "no
+  matches")
 
 ### Requirement: Flow Version Parameter
 
@@ -84,6 +89,16 @@ invalid values; its error MUST be surfaced, not swallowed.
 - GIVEN `flowVersion` omitted, `"debug"`, `"published"`, or a valid number
 - WHEN input is validated
 - THEN it MUST pass (omitted defaults to `"latest"`) and that version MUST be requested from the SDK
+- CONFIRMED (real "Calidda" org, `ZZZ-SDD-Test-DoNotUse-UpdateFlow`): omitted
+  (defaults to `"latest"`, success) and an explicit numeric version (`"3.0"`,
+  taken from the flow's own observed `fileName`, success) both pass and
+  return identical YAML. `"debug"` and `"published"` also pass client-side
+  validation and are genuinely requested from the SDK, but on this
+  particular test flow (never published, no active debug session) both
+  come back as an explicit SDK 404 ("version '<x>' is missing.
+  (not.found)") rather than a silent fallback — their SUCCESS branch (a
+  real published/debug version) remains unexercised, which is expected
+  given no such version exists on the disposable test flow
 
 #### Scenario: Invalid version value rejected by the SDK
 - GIVEN `flowVersion` set to a value the SDK does not recognize
