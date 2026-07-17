@@ -92,7 +92,49 @@ phases:
       update-flow stack, and can be re-targeted to main directly once
       PR #1 merges.
 
-      Slices B (tool MCP) and C (docs + final empirical verification)
+      Slice B (Phase 2, tasks 2.1-2.4) complete, same branch
+      feat/read-flow-slice-a: src/mcp-server/tools/read-flow.ts (flat
+      ZodRawShape, no .refine(), spawn+NDJSON mirroring update-flow.ts,
+      readOnlyHint:true/destructiveHint:false), registered in
+      src/mcp-server/index.ts, and src/mcp-server/tools/read-flow.test.ts
+      (McpServer+Client over InMemoryTransport, 6 tests: tools/list schema
+      shape + required + annotations, callTool cross-field validation with
+      2 distinct messages). pnpm test 26/26 green (20 prior + 6 new), tsc
+      --noEmit 0 errors, build clean, lint clean.
+
+      Deviation (branch-state, not a design flaw): design.md says to
+      register read_flow immediately after update_flow in index.ts, but
+      update_flow (update-flow's Slice B) does not exist on this branch —
+      feat/read-flow-slice-a only depends on feat/update-flow-slice-a
+      (Slice A/PR #1, deploy-runner core only), per the branch-base
+      correction already recorded above for Slice A. read_flow was
+      registered after test_bot_flow (the last existing tool on this
+      branch) with an inline comment flagging the pending re-order once
+      both branches converge — update-flow.ts was deliberately NOT
+      cherry-picked in to avoid duplicating another PR's work here.
+
+      Bugfix found and applied (blocking task 2.4's own verification, not
+      scope creep): package.json's "test" script
+      (`node --experimental-strip-types --test src/**/*.test.ts`) relied on
+      shell globstar expansion that plain `sh` (what npm/pnpm scripts run
+      under) does not support recursively — it silently matched only
+      src/deploy-runner/*.test.ts (1 level deep) and skipped
+      src/mcp-server/tools/read-flow.test.ts (2 levels deep) with exit 0,
+      no error. Fixed to
+      `node --experimental-strip-types --test $(find src -name '*.test.ts' | sort)`,
+      verified to pick up all 26 tests with no false positives (Node's own
+      `--test` auto-discovery without an explicit path was tried first but
+      rejected — it accidentally executes src/mcp-server/tools/test-bot-flow.ts
+      as an empty test suite because its filename matches Node's default
+      `test-*` naming convention, an unrelated false positive). Note:
+      .github/workflows/ci.yml on this branch (inherited from
+      update-flow-slice-a) does not invoke `pnpm test` yet — that step was
+      only added in update-flow-slice-b-docs (commit f316a2e, not yet on
+      this branch) — so this bug was not silently breaking CI today, but
+      would have affected local verification and any future CI once
+      branches converge.
+
+      Slice C (docs + final empirical verification via the full MCP tool)
       still pending.
   verify:
     status: pending
