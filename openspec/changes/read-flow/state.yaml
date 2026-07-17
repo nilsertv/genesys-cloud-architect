@@ -251,6 +251,28 @@ phases:
       (ZZZ-SDD-Test-DoNotUse-UpdateFlow) rather than a full sdd-apply re-run:
       flowName+wrong-flowType, flowName+correct-flowType,
       --flow-version debug, --flow-version <explicit number>.
+
+      Re-verification (sdd-verify, this session, HEAD cbffcdc, after
+      sdd-apply task 3.5 closed the gaps above): independently confirmed
+      the CRITICAL + 2 WARNING + 1 SUGGESTION are genuinely closed, not
+      just claimed closed. Cross-checked spec.md's updated scenarios
+      against tasks.md 3.5's evidence (same flowId, same flowName, same
+      errorKind values, same flowVersion numbers — no contradictions).
+      Re-ran pnpm test (26/26), tsc --noEmit (0 errors), lint (clean),
+      build (clean) myself rather than trusting the prior report. Verdict
+      updated to PASS WITH WARNINGS (0 CRITICAL, 0 blocking WARNING).
+
+      New non-blocking SUGGESTION found (pre-existing, not introduced by
+      cbffcdc, confirmed via git show cbffcdc -- spec.md that these 2
+      scenarios were untouched by the closing commit): spec.md's "Invalid
+      version value rejected by the SDK" and "Published requested but
+      none exists (unverified)" scenarios still carry stale
+      "(unverified)"/"MUST be confirmed" language even though their
+      evidence already exists in tasks.md 1.6/3.4d (errorKind:"unknown"
+      confirmed, explicit SDK error confirmed instead of silent
+      fallback) — was already scored COMPLIANT in the original verify
+      matrix rows 8-9 despite the stale text. Cosmetic text-only fix
+      recommended, does not block archive.
   archive:
     status: pending
 

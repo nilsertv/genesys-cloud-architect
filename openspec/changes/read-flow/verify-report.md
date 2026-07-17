@@ -1,194 +1,183 @@
 # Verify Report: `read-flow` (rama `feat/read-flow-slice-a`)
 
-**Fecha**: 2026-07-16
+**Fecha**: 2026-07-16 (re-verificación de cierre, sobre `cbffcdc`)
 **Modo**: openspec (artefactos completos: proposal, spec, design, tasks, state.yaml)
-**Veredicto final**: **PASS WITH WARNINGS**
+**Veredicto final**: **PASS WITH WARNINGS** (0 CRITICAL, 0 WARNING nuevos bloqueantes, 2 SUGGESTION)
 
-## Corrección de recuento
+Esta es una re-verificación de cierre, no una auditoría completa nueva. La
+pasada anterior (commit previo a `cbffcdc`, ver historial de este mismo
+archivo) encontró 1 CRITICAL + 2 WARNING + 1 SUGGESTION, todos gaps de
+verificación empírica. `sdd-apply` (commit `cbffcdc`, tarea `tasks.md` 3.5)
+cerró los 4 con 5 llamadas empíricas reales adicionales contra la org real
+"Calidda", vía el tool MCP completo (sin bypass del deploy-runner). Esta
+pasada confirma, con evidencia propia, que el cierre fue efectivo.
 
-El spec.md tiene **7 Requirements / 12 Scenarios** (`grep -c "^#### Scenario"` = 12,
-`grep -c "^### Requirement"` = 7), no "8 requisitos, 15 escenarios" como indicaba el
-brief de esta verificación. Conteo real usado abajo.
+## 1. Escenario "flowType mismatch" (CRITICAL original)
 
-## Completeness (tasks.md)
+`spec.md` líneas 68-77 ya no dice "(unverified — expected fold into
+not-found)"; dice "(confirmed — folds into not-found)" y documenta
+inline: `flowName: "ZZZ-SDD-Test-DoNotUse-UpdateFlow"` + `flowType:
+"outboundcall"` (en vez del real `"inboundcall"`) → `errorKind:
+"not-found"`.
 
-14/14 tareas marcadas `[x]` — las 14 están **genuinamente implementadas**, confirmado
-contra código real, no solo la marca de checkbox:
+`tasks.md` 3.5(a) reporta la misma llamada, el mismo `flowName`, el mismo
+`flowType` incorrecto, y el mismo resultado textual (`isError: true`, el
+mensaje mapeado exacto de `ERROR_KIND_MESSAGES["not-found"]`). Confirmé
+que ese string literal existe hoy en `src/mcp-server/tools/read-flow.ts`
+líneas 35-36 y coincide carácter por carácter con lo citado en `tasks.md`.
 
-| Fase | Tareas | Estado |
-|---|---|---|
-| Phase 1 (Slice A — core) | 1.1–1.6 | ✅ Verificado contra código (`update-helpers.ts`, `index.ts`) |
-| Phase 2 (Slice B — tool MCP) | 2.1–2.4 | ✅ Verificado contra código (`read-flow.ts`, `index.ts` registro) |
-| Phase 3 (Slice C — docs) | 3.1–3.4 | ✅ Verificado contra `skills/write-flow/**` |
+**Veredicto**: CERRADO correctamente. Hay un `errorKind` concreto
+(`"not-found"`), no una afirmación vacía de "se espera que". `spec.md` y
+`tasks.md` son consistentes entre sí (mismo `flowName`, mismo `flowType`,
+mismo resultado).
 
-## Evidencia de ejecución real
+## 2. Escenario "Resolve by flowName and flowType" (WARNING #1 original)
+
+`tasks.md` 3.5(b): `tool.handler({ flowName: "ZZZ-SDD-Test-DoNotUse-UpdateFlow",
+flowType: "inboundcall" })` (tipo correcto) devolvió YAML de 2297
+caracteres, idéntico byte a byte al obtenido vía `flowId` en 1.6/3.4a —
+confirma que `readFlow()` invoca `loadFlowByFlowNameAsync`, no solo
+`loadFlowByFlowIdAsync`. Antes de este cierre, esa rama de código solo
+tenía cobertura de unit test sobre `resolveFlowIdentifier` (función pura),
+nunca del wiring real.
+
+**Veredicto**: CERRADO. Camino real ejercitado por primera vez,
+consistente con lo declarado.
+
+## 3. Escenario "Default and valid explicit versions" (WARNING #2 original)
+
+`spec.md` líneas 88-101 ahora documenta los 4 valores de `flowVersion`:
+omitido/`"latest"` (éxito), número explícito `"3.0"` (éxito, YAML
+idéntico), `"debug"` y `"published"` (ambos SDK 404 explícito en este
+flow desechable, sin sesión de debug activa ni versión publicada — rama
+de fallo, no de éxito).
+
+`tasks.md` 3.5(c) reporta las mismas 2 llamadas nuevas (`flowVersion:
+"debug"` → 404 explícito `"version 'debug' is missing. (not.found)"`;
+`flowVersion: "3.0"`, tomado del `fileName` real ya observado en 1.6/3.4,
+no inventado → éxito, YAML idéntico de 2297 caracteres). Mismos números,
+mismo `flowId`, sin contradicciones entre `spec.md` y `tasks.md`.
+
+**Veredicto**: CERRADO. Los 4 valores tienen evidencia empírica real; 2
+en su rama de éxito, 2 en su rama de fallo (documentado explícitamente
+como limitación del flow desechable disponible, no como gap sin
+explorar).
+
+## 4. Conteo de tests en `tasks.md` 1.2 (SUGGESTION original)
+
+`tasks.md` 1.2 tiene ahora una "Nota retroactiva (sdd-verify, 2026-07-16)"
+que corrige el conteo histórico de 16 a 20 tests para
+`update-helpers.test.ts`, aclarando que el rollup final (20+6=26) ya
+estaba bien reportado en 2.4/3.4.
+
+Confirmé con `pnpm test` real (no solo lectura del texto):
+
+```
+ℹ tests 26
+ℹ suites 6
+ℹ pass 26
+ℹ fail 0
+```
+
+`update-helpers.test.ts` aporta 20 (6 `resolveFlowIdentifier` + 7
+`applyUpdateAndSave` + 5 `truncateContent` + 2 `exportFlowContent`),
+`read-flow.test.ts` aporta 6. Coincide exactamente.
+
+**Veredicto**: CERRADO.
+
+## Evidencia de ejecución real (esta pasada, HEAD = `cbffcdc`)
 
 | Comando | Resultado |
 |---|---|
-| `pnpm test` | ✅ 26/26 verde (0 fail) — coincide exactamente con lo declarado en tasks.md 2.4/3.4 |
+| `pnpm test` | ✅ 26/26 verde (0 fail) |
 | `pnpm exec tsc --noEmit` | ✅ 0 errores |
 | `pnpm run lint` (biome check) | ✅ limpio |
 | `pnpm run build` | ✅ limpio (mcp-server 2.1mb, deploy-runner 9.3mb) |
-| `git status` post-build | ✅ sin cambios no deseados en el repo |
+| `git status` post-build | ✅ sin cambios no deseados en el repo (solo `.atl/` y `docs/assessment.md`, no relacionados con este change) |
 
-`package.json`'s `"test"` script confirmado como
-`node --experimental-strip-types --test $(find src -name '*.test.ts' | sort)` — el fix
-de descubrimiento recursivo (commit `d1cff39`) está aplicado y funcionando; recoge
-`src/mcp-server/tools/read-flow.test.ts` (2 niveles de profundidad) sin problema.
+## Repaso liviano del resto del spec (sin re-auditar desde cero)
 
-`.github/workflows/ci.yml` en esta rama, confirmado, **todavía no invoca `pnpm test`**
-— consistente con lo documentado en `state.yaml` (ese paso llegó en
-`update-flow-slice-b-docs`, commit `f316a2e`, no presente en esta rama). No es un
-hallazgo nuevo, ya está correctamente reflejado.
+Confirmé por lectura de código (no solo por confiar en el texto) que las
+partes que ya habían pasado en la primera verificación siguen intactas:
 
-## Matriz de cumplimiento de escenarios (12/12)
+- `readOnlyHint: true` / `destructiveHint: false` presentes en
+  `read-flow.ts` líneas 104-105.
+- `inputSchema` sigue siendo un `ZodRawShape` plano, comentario explícito
+  contra `.refine()` en las líneas 49-50.
+- Protocolo NDJSON (`type: "log"` / `type: "result"`) sin cambios.
+- `state.yaml`: los 5 `open_decisions` siguen consistentes con el código
+  (`architect-flow-view-permission` sigue honestamente `confirmed: false`
+  con nota explicando el límite, tal como en la pasada anterior — no
+  reabierto).
+- La deuda técnica aceptada explícitamente por el usuario (falta de test
+  para el mapeo `errorKind`/NDJSON del handler, `tasks.md` 2.4) sigue
+  documentada igual, no reabierta.
 
-| # | Requirement | Scenario | Evidencia | Estado |
-|---|---|---|---|---|
-| 1 | Flow Identifier Resolution | Resolve by flowId | Unit test (`resolveFlowIdentifier`) + empírico real (1.6a, 3.4a, vía `--flow-id`) | ✅ COMPLIANT |
-| 2 | Flow Identifier Resolution | Resolve by flowName and flowType | Solo unit test de `resolveFlowIdentifier` (función pura); el camino real `readFlow()` → `loadFlowByFlowNameAsync` **nunca fue ejercitado**, ni por test ni empíricamente — las 2 rondas de verificación empírica (1.6, 3.4) usaron `--flow-id` exclusivamente | ⚠️ **GAP — ver WARNING #1** |
-| 3 | Flow Identifier Resolution | Missing or ambiguous identifier | `read-flow.test.ts` (2 mensajes distintos, `callTool`) + `resolveFlowIdentifier` unit tests | ✅ COMPLIANT |
-| 4 | Read-Only Export Workflow | Successful export, no side effects | Empírico real, 2 rondas (1.6a/b, 3.4a/b) — YAML completo confirmado, ausencia de lock confirmada (`--mode update` inmediato después tuvo éxito) | ✅ COMPLIANT (fuerte) |
-| 5 | Flow Not Found Handling | Flow does not exist | Empírico real (1.6 bonus, 3.4 bonus) + `classifyUpdateError` (deuda de test de mapeo `errorKind`/NDJSON ya aceptada explícitamente, tarea 2.4 — no reabierta aquí) | ✅ COMPLIANT |
-| 6 | Flow Not Found Handling | flowType mismatch (unverified) | spec.md exige literalmente "MUST be confirmed empirically during sdd-apply, not assumed" — **ninguna llamada con `flowName` + `flowType` incorrecto aparece en tasks.md**; 1.6/3.4 solo prueban `--flow-id` | ❌ **NO CUMPLIDO — ver CRITICAL #1** |
-| 7 | Flow Version Parameter | Default and valid explicit versions | Solo `"latest"` (omitido, éxito) confirmado; `"debug"` y un número de versión explícito **nunca fueron ejercitados** (ni éxito ni fallo) | ⚠️ **GAP — ver WARNING #2** |
-| 8 | Flow Version Parameter | Invalid version value rejected by SDK | El propio spec designa el hallazgo `flowVersion:"published"` como la evidencia confirmatoria de este escenario, y fue re-confirmado end-to-end en 3.4d | ✅ COMPLIANT |
-| 9 | Flow Version Parameter | Published requested but none exists | Empírico real, 2 rondas (1.6 bonus, 3.4d) — error explícito del SDK, no fallback silencioso | ✅ COMPLIANT |
-| 10 | MCP Tool Annotations | Tool metadata reflects non-destructive intent | `read-flow.test.ts` (`readOnlyHint:true`, `destructiveHint:false`) | ✅ COMPLIANT |
-| 11 | NDJSON Protocol | Deploy-runner emits standard NDJSON lines | Empírico end-to-end (3.4, vía el tool MCP real + spawn real) — el parseo funcionó correctamente en los 4 casos probados | ✅ COMPLIANT |
-| 12 | Output Size Guard | Large flow export (deferred to design) | Mecanismo de truncamiento unit-testeado exhaustivamente (`truncateContent`: bajo/en/sobre el límite, `maxChars<=0`); el valor concreto `MAX_YAML_CHARS=200_000` sigue sin validar contra un flow grande real — **ya documentado como riesgo abierto en `design.md`/`gotchas.md`, no es hallazgo nuevo** | ✅ COMPLIANT (mecanismo probado; constante es deuda ya aceptada) |
+No se encontraron regresiones.
 
-**10/12 COMPLIANT, 2 GAP (WARNING), 1 no cumplido contra su propio MUST (CRITICAL)**
-— nota: el escenario #6 se cuenta aparte como CRITICAL porque el propio spec lo exige
-como bloqueante ("not assumed"), no como un WARNING más.
+## Hallazgo nuevo, no bloqueante (fuera del scope de las 4 cierres pedidos)
 
-## Fidelidad a design.md
+### SUGGESTION (nueva)
 
-Las 3 desviaciones ya conocidas y aceptadas están **correctamente reflejadas**, confirmado
-por lectura directa del código:
-- Bug de `exportToObjectAsync` (el valor resuelto del `await` es `undefined`; el payload
-  real llega solo por el callback) — documentado en el doc-comment de `exportFlowContent`
-  (`update-helpers.ts`) y en el de `readFlow()` (`index.ts`), y cubierto por un unit test
-  específico (`"resolves with the callback's payload, not the awaited return value"`).
-- `flowVersion` sin enum cerrado — `z.string().min(1).optional()` en `read-flow.ts`,
-  coincide con `design.md`'s Zod Schema y con `spec.md` post-fix (commit `b2e1005`).
-- Registro de `read_flow` después de `test_bot_flow` en vez de después de `update_flow`
-  — comentario explícito en `src/mcp-server/index.ts` (líneas 67-72) documentando la
-  razón (branch-state) y el reordenamiento pendiente.
+**Dos escenarios de `spec.md` retienen etiquetas "(unverified)"/lenguaje
+"MUST be confirmed" a pesar de que su evidencia ya existe en `tasks.md`
+desde antes de esta ronda de cierre — inconsistencia cosmética
+preexistente, no introducida por `cbffcdc`.**
 
-No se encontraron desviaciones NUEVAS no documentadas entre código y `design.md`.
+Confirmado por `git show cbffcdc -- specs/read-flow/spec.md`: el diff de
+cierre tocó únicamente los escenarios "flowType mismatch" y "Default and
+valid explicit versions". Los siguientes 2 escenarios NO fueron tocados
+y siguen con texto textualmente sin actualizar:
 
-## Consistencia entre artefactos
+1. **"Invalid version value rejected by the SDK"** (`spec.md` líneas
+   103-111): dice *"the exact `errorKind` classification is unverified —
+   confirm empirically during `sdd-apply` ... filed under `"unknown"`
+   pending Slice C review"*. Pero Slice C (`tasks.md` 3.4d) SÍ revisó esto
+   y confirmó `errorKind: "unknown"` end-to-end vía el tool MCP completo
+   — el texto nunca se actualizó para reflejar que la revisión pendiente
+   ya ocurrió.
+2. **"Published requested but none exists (unverified)"** (`spec.md`
+   líneas 112-115): el título y el cuerpo siguen diciendo "UNVERIFIED —
+   MUST be confirmed during `sdd-apply`, not assumed to fall back
+   silently". Pero esto ya está confirmado en `tasks.md` 1.6 (bonus) y
+   3.4d: el SDK devuelve un error explícito 404, no un fallback
+   silencioso — dato real, no supuesto.
 
-- La contradicción `spec.md` vs. `design.md` sobre `.refine()`/enum cerrado de
-  `flowVersion` fue efectivamente corregida (commit `b2e1005`, confirmado por diff:
-  `spec.md` + `state.yaml`, +45/-20 líneas). `spec.md` actual (leído completo) exige
-  `ZodRawShape` plano sin `.refine()` y `flowVersion` como string abierto — coincide
-  con `design.md` y con el código real.
-- No se encontró ninguna otra contradicción entre `spec.md`/`design.md`/`tasks.md`/código
-  en esta pasada.
-
-## `open_decisions` de `state.yaml`
-
-| id | `confirmed` | ¿Genuinamente implementado así? |
-|---|---|---|
-| `tool-name` (`read_flow`) | `true` | ✅ — tool registrado literalmente como `"read_flow"` |
-| `flow-format-param` (yaml fijo) | `true` | ✅ — `archEnums.FLOW_FORMAT_TYPES.yaml` hardcodeado, sin parámetro `flowFormat` en el schema |
-| `size-guard-strategy` (truncar en 200_000) | `true` | ✅ — `MAX_YAML_CHARS = 200_000` en `index.ts`, mecanismo unit-testeado |
-| `resolve-flow-identifier-sharing` (reuso sin extraer) | `true` | ✅ — `resolveFlowIdentifier` importado tal cual desde `update-helpers.ts`, header comment actualizado como se describe |
-| `architect-flow-view-permission` | `false` | ✅ **correctamente documentado como no-verificable**, no como un olvido — nota detallada y honesta explicando por qué (requeriría un segundo cliente OAuth deliberadamente despojado, fuera de alcance para verificación en solitario) |
-
-Los 4 `confirmed: true` están genuinamente implementados tal como se declaran. El único
-`confirmed: false` está correctamente tratado como lo que es: un límite honesto de la
-verificación en solitario, no un descuido.
-
-## Issues
-
-### CRITICAL
-
-1. **Escenario "flowType mismatch" (Requirement: Flow Not Found Handling) sin la
-   verificación empírica que el propio `spec.md` exige como bloqueante.**
-   `spec.md` línea 71-72 dice textualmente: *"AND MUST be confirmed empirically during
-   `sdd-apply`, not assumed."* Ninguna de las 2 rondas de verificación empírica
-   (tasks.md 1.6, 3.4) invocó `read_flow`/`readFlow()` con `flowName` + un `flowType`
-   que no corresponde al flow real — ambas rondas usan `--flow-id` exclusivamente en
-   los 4 sub-casos que documentan (YAML válido, sin lock, not-found, `published` sin
-   publicar). A diferencia de `architect-flow-view-permission` (que sí quedó
-   honestamente abierto en `state.yaml` con `confirmed:false` y una nota explicando el
-   límite), este gap **no está reflejado como pendiente en ningún artefacto** — ni en
-   `open_decisions`, ni como nota en tasks.md señalando que quedó sin confirmar. El
-   riesgo funcional real es bajo (hay precedente directo y confirmado: `update_flow`
-   ya probó el comportamiento análogo de `checkoutAndLoadFlowBy...Async` con
-   `flowName`+`flowType` incorrecto), pero el propio spec pidió explícitamente NO
-   asumir por analogía, y eso es justamente lo que terminó ocurriendo sin quedar
-   documentado como tal.
-   **Acción recomendada**: 1 llamada adicional y barata contra el mismo flow
-   disponible (`ZZZ-SDD-Test-DoNotUse-UpdateFlow`, ya disposable) con `flowName`
-   correcto + un `flowType` incorrecto (p. ej. `"digitalbot"` en vez de
-   `"inboundcall"`), documentar el resultado en `tasks.md`/`state.yaml`. Si el
-   resultado confirma el fold-into-not-found esperado, esto se resuelve en minutos sin
-   reabrir una ronda completa de `sdd-apply`.
-
-### WARNING
-
-1. **Escenario "Resolve by flowName and flowType" (Requirement: Flow Identifier
-   Resolution) — camino real hacia `loadFlowByFlowNameAsync` nunca ejercitado.**
-   `resolveFlowIdentifier`'s rama `byName` está bien cubierta a nivel de función pura
-   (`update-helpers.test.ts`), pero ningún test ni verificación empírica confirma que
-   `readFlow()` (`index.ts`) efectivamente invoca `archFactoryFlows.loadFlowByFlowNameAsync`
-   cuando se le pasa `flowName`+`flowType` — las 2 rondas empíricas (1.6, 3.4) usaron
-   `--flow-id` en sus 4 sub-casos documentados. Riesgo funcional bajo (el cableado es
-   un ternario trivial: `identifier.kind === "byId" ? loadFlowByFlowIdAsync : loadFlowByFlowNameAsync`),
-   pero es una rama de código sin evidencia de ejecución real, ni mockeada ni contra la
-   org real. Se puede cerrar con la misma llamada extra sugerida en CRITICAL #1 (que
-   ya usa `flowName`), más una segunda con `flowName` + `flowType` CORRECTO para
-   confirmar el camino de éxito.
-
-2. **Escenario "Default and valid explicit versions" (Requirement: Flow Version
-   Parameter) — solo 2 de 4 valores cubiertos, y uno de ellos solo en su rama de
-   fallo.** Confirmado empíricamente: `flowVersion` omitido (`"latest"` por defecto,
-   éxito) y `"published"` (pero únicamente su rama de fallo, sobre un flow nunca
-   publicado). `"debug"` y un número de versión de commit explícito **nunca fueron
-   probados**, ni en su rama de éxito ni en la de fallo. El spec agrupa los 4 valores
-   en un solo escenario que exige que TODOS "MUST pass ... and that version MUST be
-   requested from the SDK" — con 2 de 4 sin ninguna evidencia, el escenario no está
-   completamente probado tal como está redactado.
-
-### SUGGESTION
-
-1. **`tasks.md` 1.2 declara un conteo de tests desactualizado.** Dice *"Total: 16 tests
-   (13 existentes + 3 nuevos)"* para `update-helpers.test.ts`, pero ese número quedó
-   stale después de la deviation documentada en 2.4 (commit `b218a57`, que agregó 2
-   tests más de guard `maxChars<=0` para `truncateContent` + 2 de `exportFlowContent`).
-   El archivo real tiene hoy 20 tests (confirmado por `pnpm test`), no 16. No es un
-   error funcional — 2.4/3.4 sí reportan el rollup final correcto (20 existentes + 6
-   nuevos de `read-flow.test.ts` = 26, que coincide exactamente con la ejecución real)
-   — es solo una nota histórica de 1.2 que no se actualizó retroactivamente. Cosmético,
-   no bloquea archive.
-
-2. **Costo-beneficio de cerrar los 2 gaps de arriba antes de archivar.** El flow de
-   prueba disponible (`ZZZ-SDD-Test-DoNotUse-UpdateFlow`) sigue siendo el mismo
-   disposable ya mutado repetidamente por las verificaciones previas de `update-flow` y
-   `read-flow`. Cerrar CRITICAL #1 y WARNING #1/#2 costaría ~3-4 llamadas adicionales
-   al tool/deploy-runner contra ese mismo flow (una con `flowName`+`flowType`
-   incorrecto, una con `flowName`+`flowType` correcto, una con `--flow-version debug`,
-   una con un número de versión explícito) — más barato que reabrir `sdd-apply`
-   completo, y cerraría la brecha entre lo que `spec.md` exige y lo que quedó
-   verificado.
+Estos 2 casos ya habían sido evaluados como ✅ COMPLIANT en la matriz de
+la verificación original (filas 8 y 9), apoyándose en la evidencia real de
+`tasks.md`, a pesar de que el texto de `spec.md` seguía sin actualizar —
+es decir, este gap de documentación existe desde antes del cierre de
+`cbffcdc` y nunca formó parte de los 4 ítems que esa pasada de `sdd-apply`
+debía cerrar. No es deuda técnica reabierta ni una decisión ya aceptada
+que se esté cuestionando — es una observación nueva sobre prolijidad
+documental. **No bloquea `archive`**: la evidencia real ya existe y ya fue
+validada por partida doble (verify original + esta re-verificación); solo
+el texto de `spec.md` quedó desalineado con su propia evidencia. Se
+recomienda un ajuste cosmético de texto (quitar "(unverified)"/"MUST be
+confirmed" y reemplazar por "CONFIRMED" con la cita del hallazgo real,
+igual que se hizo para los otros 2 escenarios) en algún momento, pero no
+amerita reabrir `sdd-apply`.
 
 ## ¿Listo para archive?
 
-**No sin resolver el CRITICAL.** El bloqueo real es puntual y barato de cerrar (no
-requiere cambios de código, solo 1-4 llamadas empíricas adicionales documentadas), pero
-tal como está, la Escenario "flowType mismatch" de `spec.md` — que el propio spec marca
-como bloqueante ("MUST be confirmed... not assumed") — no tiene evidencia de haberse
-cumplido, y ese vacío no quedó honestamente reflejado como pendiente en ningún
-artefacto (a diferencia de `architect-flow-view-permission`, que sí lo está). Los 2
-WARNING (flowName end-to-end, flowVersion debug/numérico) no son bloqueantes por sí
-solos, pero conviene cerrarlos en la misma pasada ya que comparten la misma causa raíz
-(las 2 rondas de verificación empírica se concentraron exclusivamente en `--flow-id` +
-`flowVersion` por defecto/`published`).
+**Sí.** Los 4 ítems que motivaron la ronda anterior de cierre
+(`sdd-apply` commit `cbffcdc`) están genuinamente cerrados con evidencia
+empírica real, verificada de forma independiente en esta pasada (no solo
+confiando en que el reporte anterior decía que estaba cerrado):
 
-Todo lo demás — tests (26/26), typecheck, lint, build, fidelidad a `design.md`,
-consistencia entre artefactos, y el estado real de los 5 `open_decisions` — está limpio
-y no bloquea archive.
+- CRITICAL (flowType mismatch): CERRADO, `errorKind` concreto documentado
+  y consistente entre `spec.md`/`tasks.md`.
+- WARNING #1 (flowName+flowType end-to-end): CERRADO.
+- WARNING #2 (flowVersion debug/número explícito): CERRADO.
+- SUGGESTION (conteo de tests stale): CERRADO.
+
+`pnpm test` (26/26), `pnpm exec tsc --noEmit` (0 errores), `pnpm run
+lint` (limpio) y `pnpm run build` (limpio) confirmados por ejecución real
+en esta pasada, no solo por lectura de `tasks.md`. Ninguna regresión
+encontrada en el resto del spec.
+
+El único hallazgo nuevo es una SUGGESTION cosmética (2 escenarios de
+`spec.md` con lenguaje "(unverified)" desactualizado pese a tener
+evidencia real ya documentada en `tasks.md`) — no bloqueante, no
+relacionado con los 4 ítems que se pidió cerrar, y no reabre ninguna
+decisión ya aceptada.
