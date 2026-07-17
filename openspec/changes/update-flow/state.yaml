@@ -76,15 +76,50 @@ phases:
       trigger ci.yml (its `edited` base-change event isn't in ci.yml's
       default trigger set, only opened/synchronize/reopened are).
   verify:
-    status: pending
+    status: done
+    artifact: openspec/changes/update-flow/verify-report.md
     note: >
-      Never run through sdd-verify this session — went straight from
-      apply to merge on explicit user instruction to close out read-flow's
-      archive path. Code is live on main and passing CI; formal sdd-verify
-      for update-flow itself remains a follow-up if desired.
+      PASS WITH WARNINGS. Verified against real main (HEAD 121d7eb), not
+      feature branches (already deleted/merged). pnpm test 26/26 green, tsc
+      --noEmit 0 errors, lint clean, build clean, and confirmed real GitHub
+      CI (run 29590331340, the read-flow merge PR that contains the full
+      update-flow merge) green including the tools/list smoke test.
+
+      1 CRITICAL (formal, pre-existing, already accepted): Lock Handling's
+      "locked-by-other-user" scenarios have zero runtime evidence of any
+      kind (no unit test — classifyUpdateError() was never extracted to the
+      testable update-helpers.ts module — and no empirical confirmation,
+      per this file's own note above requiring a second real OAuth
+      identity). Not a regression, not reopened — already an explicit user
+      decision (2026-07-16). Does not block archive.
+
+      5 WARNING: (1) classifyUpdateError()'s not-found branch was
+      empirically confirmed once but has no persisted regression test: (2)
+      update-flow.ts has no dedicated test file, unlike read-flow.ts (which
+      added a schema regression test citing update_flow's original bug but
+      only covering read_flow); the CI smoke test does catch the
+      empty-schema bug class for update_flow specifically, just not the
+      exact required-keys/validation-message contract; (3) design.md's Open
+      Questions checkboxes were never updated to reflect the partial
+      not-found/type-mismatch resolution; (4) spec.md's Flow Identifier
+      Resolution requirement still names the `.refine()` mechanism that was
+      deliberately reverted; (5) skills/write-flow/references/examples/
+      workflow.md still uses the non-existent addVariableString() that task
+      2.4 claimed to have corrected (only sdk-patterns.md was actually
+      fixed).
+
+      2 SUGGESTION: openspec/config.yaml's testing section is stale
+      (predates this change's node:test addition); tasks.md 1.3's
+      documented test script string no longer matches package.json
+      (superseded by a later read-flow-era fix, d1cff39).
+
+      Confirmed with real evidence (git diff, not assumption) that the
+      read-flow merge's reordering of src/mcp-server/index.ts (inserting
+      read_flow's registration after update_flow's) only added lines and
+      touched nothing in update_flow's block.
   archive:
     status: pending
-    note: "Not archived — see verify.note. Code is merged to main regardless of SDD lifecycle status."
+    note: "Verify passed (see verify.note) — ready for sdd-archive."
 
 open_decisions:
   - id: tool-surface

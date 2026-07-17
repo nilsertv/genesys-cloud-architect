@@ -17,7 +17,7 @@ export async function buildFlow(scripting: ArchitectScripting) {
     const sequence = initialState.outputSequence;
 
     // Create callback number variable
-    const callbackVar = flow.addVariableString("callbackNumber");
+    const callbackVar = flow.addVariable("callbackNumber", flow.dataTypes.string);
     callbackVar.setDefaultValueAsString("Not provided");
 
     // Set callback number from caller ANI
