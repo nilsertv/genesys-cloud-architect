@@ -116962,6 +116962,9 @@ async function applyUpdateAndSave(flow, mutate, publish) {
   }
 }
 function truncateContent(content, maxChars) {
+  if (maxChars <= 0) {
+    return { content: "", truncated: content.length > 0 };
+  }
   if (content.length <= maxChars) {
     return { content, truncated: false };
   }
@@ -116969,6 +116972,18 @@ function truncateContent(content, maxChars) {
 
 # [TRUNCATED \u2014 original size ${content.length} chars, showing first ${maxChars}. Request a specific flowVersion or narrow the review to reduce size.]`;
   return { content: content.slice(0, maxChars) + marker, truncated: true };
+}
+async function exportFlowContent(flow, flowFormat) {
+  let exported;
+  await flow.exportToObjectAsync((result) => {
+    exported = result;
+  }, flowFormat);
+  if (!exported) {
+    throw new Error(
+      "exportToObjectAsync completed without invoking its callback with export content."
+    );
+  }
+  return exported;
 }
 
 // src/deploy-runner/index.ts
@@ -117233,15 +117248,10 @@ async function readFlow(scripting, opts) {
     identifier.flowType,
     opts.flowVersion
   );
-  let exported;
-  await flow.exportToObjectAsync((result) => {
-    exported = result;
-  }, archEnums.FLOW_FORMAT_TYPES.yaml);
-  if (!exported) {
-    throw new Error(
-      "exportToObjectAsync completed without invoking its callback with export content."
-    );
-  }
+  const exported = await exportFlowContent(
+    flow,
+    archEnums.FLOW_FORMAT_TYPES.yaml
+  );
   const { content, truncated } = truncateContent(
     exported.content,
     MAX_YAML_CHARS

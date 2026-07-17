@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import {
     applyUpdateAndSave,
+    exportFlowContent,
     resolveFlowIdentifier,
     truncateContent,
 } from "./update-helpers.ts";
@@ -512,19 +513,13 @@ export async function readFlow(
     // `{content, fileName}` is only ever delivered via the callback
     // parameter (`callbackExportObject`), matching the SDK's own doc
     // comment: "the callback function is passed a JSON object that
-    // contains flow export information." Capture it there instead of
-    // trusting the awaited return value.
-    let exported: { content: string; fileName: string } | undefined;
-    await flow.exportToObjectAsync((result) => {
-        exported = result;
-    }, archEnums.FLOW_FORMAT_TYPES.yaml);
-
-    if (!exported) {
-        throw new Error(
-            "exportToObjectAsync completed without invoking its callback " +
-                "with export content.",
-        );
-    }
+    // contains flow export information." `exportFlowContent` (pure,
+    // node:test-covered in update-helpers.test.ts) captures it there
+    // instead of trusting the awaited return value.
+    const exported = await exportFlowContent(
+        flow,
+        archEnums.FLOW_FORMAT_TYPES.yaml,
+    );
 
     const { content, truncated } = truncateContent(
         exported.content,

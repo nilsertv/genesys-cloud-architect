@@ -109,6 +109,9 @@ export function truncateContent(
     content: string,
     maxChars: number,
 ): { content: string; truncated: boolean } {
+    if (maxChars <= 0) {
+        return { content: "", truncated: content.length > 0 };
+    }
     if (content.length <= maxChars) {
         return { content, truncated: false };
     }
@@ -116,4 +119,40 @@ export function truncateContent(
         `\n\n# [TRUNCATED — original size ${content.length} chars, showing first ${maxChars}. ` +
         `Request a specific flowVersion or narrow the review to reduce size.]`;
     return { content: content.slice(0, maxChars) + marker, truncated: true };
+}
+
+export interface ExportableFlow {
+    exportToObjectAsync(
+        callbackFunction: (exportObject: {
+            content: string;
+            fileName: string;
+        }) => void,
+        flowFormat: string,
+    ): Promise<unknown>;
+}
+
+/**
+ * Wraps `ArchBaseFlow#exportToObjectAsync`, working around a confirmed SDK
+ * quirk (see readFlow()'s doc comment in index.ts for the empirical
+ * finding): the awaited Promise resolves to `undefined` even on success —
+ * the real `{content, fileName}` is only ever delivered via the callback
+ * parameter. Throws if the callback is never invoked (e.g. the SDK call
+ * itself fails silently) instead of returning `undefined` downstream.
+ */
+export async function exportFlowContent(
+    flow: ExportableFlow,
+    flowFormat: string,
+): Promise<{ content: string; fileName: string }> {
+    let exported: { content: string; fileName: string } | undefined;
+    await flow.exportToObjectAsync((result) => {
+        exported = result;
+    }, flowFormat);
+
+    if (!exported) {
+        throw new Error(
+            "exportToObjectAsync completed without invoking its callback " +
+                "with export content.",
+        );
+    }
+    return exported;
 }
