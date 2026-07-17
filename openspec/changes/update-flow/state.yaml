@@ -68,10 +68,23 @@ phases:
         branch: feat/update-flow-slice-b-docs
         title: "docs: document update_flow workflow in write-flow skill"
         base: feat/update-flow-slice-b
+    note: >
+      All 3 PRs merged to main via merge commit (not squash, to preserve
+      SHAs for the stacked feat/read-flow-slice-a branch built on top of
+      PR #1): #1 -> 1a1f537, #2 -> c4d5f5e, #3 -> 997c3bf. Merged in order
+      after retargeting #2/#3's base to main and forcing a close/reopen to
+      trigger ci.yml (its `edited` base-change event isn't in ci.yml's
+      default trigger set, only opened/synchronize/reopened are).
   verify:
     status: pending
+    note: >
+      Never run through sdd-verify this session — went straight from
+      apply to merge on explicit user instruction to close out read-flow's
+      archive path. Code is live on main and passing CI; formal sdd-verify
+      for update-flow itself remains a follow-up if desired.
   archive:
     status: pending
+    note: "Not archived — see verify.note. Code is merged to main regardless of SDD lifecycle status."
 
 open_decisions:
   - id: tool-surface

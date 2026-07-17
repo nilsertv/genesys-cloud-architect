@@ -275,6 +275,25 @@ phases:
       recommended, does not block archive.
   archive:
     status: pending
+    note: >
+      PR #4 (feat/read-flow-slice-a -> main) merged via merge commit,
+      SHA dbc7598. Required resolving a real merge conflict discovered
+      only at PR-open time (mergeable: CONFLICTING) — feat/read-flow-slice-a
+      branched before update-flow's Slice B/C existed on this branch, so
+      both stacks independently touched package.json's "test" script,
+      SKILL.md, sdk-patterns.md, and src/mcp-server/index.ts's tool
+      registration. Resolved by hand: kept both package.json script
+      additions (typecheck from update-flow + the test glob fix from
+      read-flow), folded "Reading an Existing Flow Before Editing It"
+      into "Updating an Existing Flow" in SKILL.md per the standalone
+      section's own note, merged both SDK contract sections in
+      sdk-patterns.md (updateFlow first, read_flow second), and
+      re-ordered read_flow's registration to immediately follow
+      update_flow in index.ts per design.md's original intent (the
+      stale "not present on this branch" comment no longer applied).
+      Rebuilt both bundles, re-ran pnpm test (26/26), tsc --noEmit
+      (0 errors), lint, build — all clean post-merge, both locally and
+      via real CI on the pushed merge commit before merging the PR.
 
 open_decisions:
   - id: tool-name
