@@ -36,6 +36,15 @@ npm install --save-dev purecloud-flow-scripting-api-sdk-javascript
 
 If the user already has a flow file and just wants to deploy it, skip straight to **step 5** — call the `deploy_flow` MCP tool with the file path. Only fall back to steps 1–4 if deployment fails or the user asks for help writing/fixing the flow.
 
+## New flow vs. updating an existing flow
+
+Before writing any code, ask: **is this a brand-new flow, or an edit to a flow that already exists in Genesys Cloud?**
+
+- **New flow** → follow the Workflow below (`buildFlow` + `deploy_flow`).
+- **Update an existing flow** → skip to **"Updating an Existing Flow"** below (`updateFlow` + `update_flow`). Do NOT use `deploy_flow`/`buildFlow` to edit a flow that already exists — `deploy_flow`'s underlying `createFlow<Type>Async` path deletes and recreates any flow with the same name, discarding its flow ID and version history.
+
+If unsure which the user means, ask directly — do not guess based on whether a local file already exists, since a local file can describe either a first deploy or a later edit.
+
 ## Workflow
 
 ### 1. Understand the requirement
@@ -146,24 +155,36 @@ Input: { "sessionId": "<session-id>", "message": "Billing" }
 
 Walk through the flow's conversation paths to verify the bot responds correctly. If the bot behaves unexpectedly, update the flow file, re-deploy, re-publish, and test again.
 
-## Reading an Existing Flow Before Editing It
+## Updating an Existing Flow
 
-> **Branch-state note**: this section is deliberately standalone. The fuller
-> "Updating an Existing Flow" section (covering the `updateFlow` export and
-> the `update_flow` MCP tool) is documented on a separate branch
-> (`update-flow`'s Slice C docs, commit `f19d983`) that is not yet merged
-> into this branch — see `openspec/changes/read-flow/state.yaml`'s
-> branch-base notes. Once both branches converge, fold this guidance into
-> "Updating an Existing Flow", right after its step 2 ("Write the update
-> file").
+Use this path when the flow already exists in Genesys Cloud and you want to edit it in place — checkout, apply edits, check-in or publish — without touching its flow ID or version history. This is different from re-running `deploy_flow`, which would delete and recreate the flow.
 
-Before writing an `updateFlow` export against a flow that already exists in
-Genesys Cloud, call the `read_flow` MCP tool first to see the flow's actual
-current structure — states, tasks, variables, and actions, as full YAML.
-This is the exact problem that motivated building `read_flow` in the first
-place: without it, nobody could see what a flow really looked like before
-editing it, so `update_flow` bodies were being written against assumptions
-instead of the flow's real, deployed structure.
+### 1. Read the relevant references
+
+Same references as a new flow (`sdk-patterns.md`, `gotchas.md`, `action-reference.md`, `expression-reference.md` if needed, and the matching example). The action-building patterns are identical — only the file's exported function and the deploy step differ.
+
+### 2. Write the update file
+
+Write a TypeScript file that exports `updateFlow`, not `buildFlow`:
+
+```typescript
+import type { ArchitectScripting } from "purecloud-flow-scripting-api-sdk-javascript";
+
+export async function updateFlow(scripting: ArchitectScripting, flow: unknown): Promise<void> {
+    // `flow` is the already-checked-out flow object — mutate it directly.
+    // Do NOT call flow.checkInAsync() or flow.publishAsync() here — the
+    // deploy-runner calls one of those for you, gated by the `publish` input.
+}
+```
+
+#### Read the flow's current structure first
+
+Before writing your `updateFlow` edits, call the `read_flow` MCP tool to see
+the flow's actual current structure — states, tasks, variables, and actions,
+as full YAML. This is the exact problem that motivated building `read_flow`
+in the first place: without it, nobody could see what a flow really looked
+like before editing it, so `update_flow` bodies were being written against
+assumptions instead of the flow's real, deployed structure.
 
 ```
 Tool: read_flow
@@ -179,3 +200,37 @@ change.
 See `references/sdk-patterns.md`'s "The `read_flow` Contract" section for
 the tool's full input/output shape, and `references/gotchas.md` for
 truncation behavior on large flows and `flowVersion` details.
+
+**Rules:**
+- The function receives the SDK **and the already-checked-out flow object** — it does not create a flow itself
+- `updateFlow` is edits-only: never call `flow.checkInAsync()` or `flow.publishAsync()` inside it — the tool owns that step so it can guarantee the flow is unlocked on failure
+- Only use `import type` from the SDK
+- The exact same action/menu/state/expression patterns from `sdk-patterns.md` apply — you're still using `scripting.factories`, just against an existing flow instead of a freshly created one
+
+### 3. Typecheck
+
+Same command as step 4 above, run against the update file.
+
+### 4. Update
+
+Use the `update_flow` MCP tool:
+
+```
+Tool: update_flow
+Input: {
+  "flowFile": "./path/to/update.ts",
+  "flowId": "<existing-flow-id>",
+  "flowType": "inboundcall",
+  "publish": false
+}
+```
+
+You must supply exactly one of `flowId` or `flowName`. **`flowType` is always required**, even when identifying the flow by `flowId` — the Architect Scripting SDK's checkout methods require it for both lookup paths.
+
+Other inputs:
+- `forceUnlock` (default `false`) — forcibly takes over a flow locked by another user, discarding their unsaved Architect UI edits. Only set this when the user explicitly asks to override someone else's lock.
+- `publish` (default `false`) — publish the flow after editing instead of just checking it in. Set this when the user wants the change live immediately (and needed to test a bot flow afterward).
+
+If the flow is locked by another user and `forceUnlock` wasn't set, the tool reports a distinct "locked" error — do not silently retry with `forceUnlock: true` without telling the user, since that discards someone else's unsaved work.
+
+If `update_flow` fails and reports the flow lock was NOT automatically released, tell the user explicitly — they may need to manually unlock the flow in the Architect UI.
