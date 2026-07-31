@@ -132,18 +132,16 @@ open_decisions:
   - id: pr3-size-exception
     question: "PR3 (wiring de dos llamadas en index.ts + breaking change en update-flow.ts + docs + update-flow.test.ts nuevo) midió ~654 líneas reales (git diff --stat contra update-flow-safeguards-pr2), muy por encima del presupuesto de 400 y también por encima del rango estimado en tasks.md (~350-420, riesgo Alto ya anticipado). ¿Aceptar excepción, o partir en sub-PRs (p.ej. 3a: wiring index.ts/update-flow.ts; 3b: update-flow.test.ts + docs)?"
     recommendation: "Aceptar excepción — igual que PR2 (pr2-size-exception), el wiring de las dos llamadas en index.ts, el breaking change de update-flow.ts, y el test de regresión del schema (mismo patrón que read-flow.test.ts, crítico dado el bug histórico ZodEffects) están todos acoplados al mismo contrato de protocolo; partirlos en sub-PRs sería artificial y dejaría un sub-PR con wiring sin su test de regresión de schema."
-    confirmed: false
-    decision: "pending-user-confirmation"
+    confirmed: true
+    decision: "size-exception-accepted"
     note: >
-      NO confirmado por el usuario todavía — a diferencia de pr2-size-exception,
-      esta vez el prompt de sdd-apply no pre-autorizó una excepción para PR3.
-      sdd-apply implementó la Fase 3 completa igualmente (todas las tareas
-      1-3.8 completadas, tests/typecheck/lint en verde) porque separar el
-      wiring de su test de regresión de schema y de la documentación del
-      mismo contrato hubiera sido más riesgoso que entregarlo como una unidad
-      y señalar la excepción pendiente aquí. El commit final de esta rama
-      NO se ha hecho todavía / o se hizo pendiente de esta confirmación — ver
-      apply-progress.md para el desglose exacto de líneas por archivo. El
+      Usuario confirmó excepción de tamaño para PR3 (commit 20efebb, ~654
+      líneas de código). Igual que pr2-size-exception: el wiring de las dos
+      llamadas en index.ts, el breaking change de update-flow.ts, el test de
+      regresión de schema, y la documentación del mismo contrato están
+      directamente acoplados — partirlos en sub-PRs hubiera dejado un
+      sub-PR con wiring sin su test de regresión de schema. Ver
+      apply-progress.md para el desglose exacto de líneas por archivo.
       usuario debe decidir antes de abrir el PR en GitHub (que todavía no se
       abrió en esta sesión): (a) aceptar la excepción de tamaño, o (b) pedir
       que se divida en sub-PRs sobre esta misma rama. El commit local en
