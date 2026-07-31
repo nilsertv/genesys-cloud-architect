@@ -1,0 +1,99 @@
+change: update-flow-safeguards
+created: 2026-07-31
+execution_mode: interactive
+artifact_store: openspec
+delivery_strategy: ask-on-risk
+chain_strategy: stacked-to-main
+review_budget_lines: 400
+
+phases:
+  explore:
+    status: done
+    artifact: openspec/changes/update-flow-safeguards/exploration.md
+  proposal:
+    status: done
+    artifact: openspec/changes/update-flow-safeguards/proposal.md
+  design:
+    status: done
+    artifact: openspec/changes/update-flow-safeguards/design.md
+  specs:
+    status: done
+    artifact: openspec/changes/update-flow-safeguards/specs/update-flow-safeguards/spec.md
+  tasks:
+    status: done
+    artifact: openspec/changes/update-flow-safeguards/tasks.md
+  apply:
+    status: partial
+    artifact: openspec/changes/update-flow-safeguards/apply-progress.md
+    note: >
+      Phase 1 of 3 done. Phase 1 (PR1, work unit 1): baseline envelope
+      write/read/delete + flowId path-traversal sanitization + `yaml`
+      dependency, all TDD RED->GREEN, tests/typecheck/lint pass. Branch
+      `update-flow-safeguards-pr1` off `main`, no PR opened yet (not
+      requested). Task 1.6 (empirical real-org export byte-stability check)
+      is blocked — no live Genesys Cloud org access in this sandboxed apply
+      session; deferred to a session with real credentials. Phase 2 (PR2)
+      and Phase 3 (PR3) not started.
+
+open_decisions:
+  - id: same-name-vs-fork
+    question: "\"Mismo nombre o nueva versión\" — Genesys auto-versiona cada checkIn/publish bajo el mismo flowId, eso no es una elección posible. La elección real es: editar in-place vs. fork a un flujo nuevo con otro nombre."
+    recommendation: "Editar in-place (no agregar soporte de fork en este cambio)"
+    confirmed: true
+    decision: "edit-in-place-no-fork"
+  - id: baseline-persistence
+    question: "¿Dónde vive el export/baseline capturado antes de editar?"
+    recommendation: "Solo en memoria del proceso"
+    confirmed: true
+    decision: "persisted-to-disk"
+    note: "Usuario pidió explícitamente persistencia a disco en <project-root>/exports/, no en memoria. sdd-propose/design deben definir naming, cleanup y staleness policy para esta carpeta."
+  - id: diff-gate-posture
+    question: "¿Qué pasa si el diff detecta cambios no solicitados antes de publicar?"
+    recommendation: "Bloquear sin excepción"
+    confirmed: true
+    decision: "hard-block-no-override"
+  - id: publish-confirmation-mechanism
+    question: "¿Cómo se confirma antes de publicar (mismo flujo, cambios revisados)?"
+    recommendation: "Protocolo de dos llamadas (llamar sin publish, mostrar diff, re-invocar con flag explícito)"
+    confirmed: true
+    decision: "two-call-explicit-flag"
+  - id: baseline-file-naming
+    question: "¿Cómo se nombra el archivo de baseline en exports/?"
+    recommendation: "Por flowId (exports/<flowId>.baseline.yaml)"
+    confirmed: true
+    decision: "by-flow-id"
+  - id: diff-gate-scope
+    question: "¿Qué debe detectar exactamente el diff antes de publicar?"
+    recommendation: "Solo concurrencia (drift de terceros entre llamada 1 y 2)"
+    confirmed: true
+    decision: "strict-full-baseline-diff"
+    note: >
+      CORRECCIÓN sobre lo que proposal.md asumió inicialmente ("optimistic-concurrency
+      check", solo drift de terceros entre las 2 llamadas). El usuario confirmó
+      explícitamente la opción "Más estricto": el diff debe comparar el flujo editado
+      contra el baseline ORIGINAL completo (capturado en la llamada 1, antes de
+      cualquier edición), para detectar si la PROPIA edición del usuario tocó algo
+      fuera de lo solicitado — no solo si un tercero modificó el flujo mientras tanto.
+      Esto es el requisito #5 original del usuario en su forma más literal. sdd-propose
+      debe corregir la sección de diff-gate de proposal.md para reflejar esto; sdd-spec/
+      sdd-design deben resolver cómo expresar "lo solicitado" de forma comparable (dado
+      que nada en el código expresa intención declarada hoy — ver riesgo ya anotado en
+      exploration.md) y cómo evitar falsos positivos por campos que Genesys regenera
+      automáticamente en cada export.
+  - id: baseline-cleanup-policy
+    question: "¿Cuándo se borra el archivo de baseline en exports/?"
+    recommendation: "Solo al publicar con éxito, sin TTL"
+    confirmed: true
+    decision: "delete-on-success-only-no-ttl"
+  - id: publish-flag-removal
+    question: "¿El parámetro `publish: boolean` de update_flow se elimina por completo (breaking change, siempre 2 llamadas), o se mantiene como atajo de compatibilidad que ejecuta ambas llamadas internamente?"
+    recommendation: "Eliminar por completo, forzar siempre las 2 llamadas"
+    confirmed: true
+    decision: "remove-publish-force-two-calls"
+    note: >
+      Usuario confirmó explícitamente: sin atajo de compatibilidad. `publish: boolean`
+      se elimina del schema de `update_flow`; el protocolo de dos llamadas
+      (confirmPublish) es obligatorio siempre, sin excepción. skills/write-flow/SKILL.md
+      debe reescribir cualquier ejemplo que use `publish: true` (p.ej. bot-flow-testing).
+      Scope confirmado limitado a `update_flow` exclusivamente — no toca `deploy_flow`/
+      `createFlow<Type>Async` (creación de flujos nuevos), que queda sin cambios.

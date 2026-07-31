@@ -8,6 +8,10 @@
 // the test runner's own I/O. This module is imported by BOTH index.ts and
 // update-helpers.test.ts precisely to avoid that.
 
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+
 export type FlowIdentifier =
     | { kind: "byId"; flowId: string }
     | { kind: "byName"; flowName: string; flowType: string };
@@ -155,4 +159,92 @@ export async function exportFlowContent(
         );
     }
     return exported;
+}
+
+/**
+ * Persisted pre-edit/post-edit snapshot for a single in-progress `updateFlow`
+ * call, written to `exports/<flowId>.baseline.yaml`.
+ *
+ * `originalContent` is captured right after checkout, before any edit runs.
+ * `requestedContent` is captured after the edit but before check-in, and is
+ * absent until that second write happens (see design.md's "Baseline write
+ * timing" decision — two separate writes, not one).
+ */
+export interface BaselineEnvelope {
+    flowId: string;
+    capturedAt: string;
+    originalContent: string;
+    requestedContent?: string;
+}
+
+/**
+ * Builds the on-disk path for a flow's baseline envelope:
+ * `<exportsDir>/<flowId>.baseline.yaml`.
+ *
+ * `flowId` is caller-supplied input that feeds directly into a file path, and
+ * nothing upstream validates its shape — so this throws if it contains `/`,
+ * `\`, or `..`, instead of silently allowing path traversal outside
+ * `exportsDir`.
+ */
+export function baselineFilePath(exportsDir: string, flowId: string): string {
+    if (
+        flowId.includes("/") ||
+        flowId.includes("\\") ||
+        flowId.includes("..")
+    ) {
+        throw new Error(
+            `Unsafe flowId for baseline file path: ${JSON.stringify(flowId)}`,
+        );
+    }
+    return join(exportsDir, `${flowId}.baseline.yaml`);
+}
+
+/**
+ * Serializes a BaselineEnvelope to YAML and writes it to `filePath`,
+ * overwriting any existing file at that path (per design.md's "Baseline
+ * collision" decision: a successful checkout's exclusive lock is the sole
+ * staleness signal, so any prior file is always overwritten, never merged
+ * with or preserved).
+ */
+export async function writeBaselineFile(
+    filePath: string,
+    envelope: BaselineEnvelope,
+): Promise<void> {
+    await writeFile(filePath, stringifyYaml(envelope), "utf8");
+}
+
+/**
+ * Reads and parses the BaselineEnvelope at `filePath`, or returns `undefined`
+ * if the file does not exist (ENOENT). Any other read/parse error is
+ * rethrown.
+ */
+export async function readBaselineFile(
+    filePath: string,
+): Promise<BaselineEnvelope | undefined> {
+    let raw: string;
+    try {
+        raw = await readFile(filePath, "utf8");
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            return undefined;
+        }
+        throw error;
+    }
+    return parseYaml(raw) as BaselineEnvelope;
+}
+
+/**
+ * Deletes the baseline file at `filePath`. Ignores ENOENT (already deleted or
+ * never existed) so callers can always call this unconditionally on a
+ * successful publish without a preceding existence check.
+ */
+export async function deleteBaselineFile(filePath: string): Promise<void> {
+    try {
+        await rm(filePath);
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            return;
+        }
+        throw error;
+    }
 }
