@@ -26,22 +26,40 @@ phases:
     status: partial
     artifact: openspec/changes/update-flow-safeguards/apply-progress.md
     note: >
-      Phases 1 and 2 of 3 done. Phase 1 (PR1, work unit 1): baseline
-      envelope write/read/delete + flowId path-traversal sanitization +
-      `yaml` dependency, all TDD RED->GREEN, tests/typecheck/lint pass.
-      Branch `update-flow-safeguards-pr1` off `main`, no PR opened yet (not
-      requested). Task 1.6 (empirical real-org export byte-stability check)
-      is blocked — no live Genesys Cloud org access in this sandboxed apply
-      session; deferred to a session with real credentials. Phase 2 (PR2,
-      work unit 2): `diffFlowYaml` structural diff engine + `evaluateFlowDiffGate`
-      + exported `KNOWN_VOLATILE_FLOW_PATHS` (ships empty per design.md
-      fallback), all TDD RED->GREEN, tests/typecheck/lint pass. Branch
+      Phases 1-3 of 3 done (implementation). Phase 1 (PR1, work unit 1):
+      baseline envelope write/read/delete + flowId path-traversal
+      sanitization + `yaml` dependency, all TDD RED->GREEN, tests/typecheck/
+      lint pass. Branch `update-flow-safeguards-pr1` off `main`, no PR
+      opened yet (not requested). Task 1.6 (empirical real-org export
+      byte-stability check) is blocked — no live Genesys Cloud org access in
+      this sandboxed apply session; deferred to a session with real
+      credentials. Phase 2 (PR2, work unit 2): `diffFlowYaml` structural
+      diff engine + `evaluateFlowDiffGate` + exported
+      `KNOWN_VOLATILE_FLOW_PATHS` (ships empty per design.md fallback), all
+      TDD RED->GREEN, tests/typecheck/lint pass. Branch
       `update-flow-safeguards-pr2` off `update-flow-safeguards-pr1`
       (stacked-to-main), no PR opened yet. Task 2.5 (empirical real-org
       confirmation of stable name/id array keys) is blocked for the same
       reason as 1.6 — does not block Phase 3 since the index-based fallback
-      degrades safely (more conservative, never less). Phase 3 (wiring/docs,
-      PR3) not started.
+      degrades safely (more conservative, never less). Phase 3 (PR3, work
+      unit 3): two-call wiring in `index.ts` (`updateFlow()` call-1 baseline
+      capture, new `confirmAndPublishFlow()` call-2 verify+publish gate,
+      `classifyUpdateError()` errorKind precedence, CLI `--confirm-publish`/
+      `--exports-dir`), `update-flow.ts` breaking schema change
+      (`publish` removed, `confirmPublish` added, no compat alias, diff
+      summary + block-reason surfaced in responses), `.gitignore` (`exports/`),
+      `skills/write-flow/SKILL.md` + `references/gotchas.md` rewritten for
+      the two-call protocol. Branch `update-flow-safeguards-pr3` off
+      `update-flow-safeguards-pr2` (stacked-to-main). Added
+      `update-flow.test.ts` (tools/list schema regression guard, same
+      pattern as `read-flow.test.ts`) — TDD RED confirmed by stashing the
+      schema change and re-running, then GREEN on restore. Tests
+      (55/55)/typecheck/lint all pass. Tasks 3.9/3.10 (empirical end-to-end
+      two-call flow against a real org; `process.cwd()` reliability under
+      the plugin launch model) are BLOCKED for the same reason as 1.6/2.5 —
+      no live org/plugin-launch environment in this sandboxed session. See
+      `pr3-size-exception` below for a size overage requiring user
+      confirmation before this PR is merge-ready.
 
 open_decisions:
   - id: same-name-vs-fork
@@ -111,3 +129,24 @@ open_decisions:
       debe reescribir cualquier ejemplo que use `publish: true` (p.ej. bot-flow-testing).
       Scope confirmado limitado a `update_flow` exclusivamente — no toca `deploy_flow`/
       `createFlow<Type>Async` (creación de flujos nuevos), que queda sin cambios.
+  - id: pr3-size-exception
+    question: "PR3 (wiring de dos llamadas en index.ts + breaking change en update-flow.ts + docs + update-flow.test.ts nuevo) midió ~654 líneas reales (git diff --stat contra update-flow-safeguards-pr2), muy por encima del presupuesto de 400 y también por encima del rango estimado en tasks.md (~350-420, riesgo Alto ya anticipado). ¿Aceptar excepción, o partir en sub-PRs (p.ej. 3a: wiring index.ts/update-flow.ts; 3b: update-flow.test.ts + docs)?"
+    recommendation: "Aceptar excepción — igual que PR2 (pr2-size-exception), el wiring de las dos llamadas en index.ts, el breaking change de update-flow.ts, y el test de regresión del schema (mismo patrón que read-flow.test.ts, crítico dado el bug histórico ZodEffects) están todos acoplados al mismo contrato de protocolo; partirlos en sub-PRs sería artificial y dejaría un sub-PR con wiring sin su test de regresión de schema."
+    confirmed: false
+    decision: "pending-user-confirmation"
+    note: >
+      NO confirmado por el usuario todavía — a diferencia de pr2-size-exception,
+      esta vez el prompt de sdd-apply no pre-autorizó una excepción para PR3.
+      sdd-apply implementó la Fase 3 completa igualmente (todas las tareas
+      1-3.8 completadas, tests/typecheck/lint en verde) porque separar el
+      wiring de su test de regresión de schema y de la documentación del
+      mismo contrato hubiera sido más riesgoso que entregarlo como una unidad
+      y señalar la excepción pendiente aquí. El commit final de esta rama
+      NO se ha hecho todavía / o se hizo pendiente de esta confirmación — ver
+      apply-progress.md para el desglose exacto de líneas por archivo. El
+      usuario debe decidir antes de abrir el PR en GitHub (que todavía no se
+      abrió en esta sesión): (a) aceptar la excepción de tamaño, o (b) pedir
+      que se divida en sub-PRs sobre esta misma rama. El commit local en
+      `update-flow-safeguards-pr3` SÍ se hizo (siguiendo la instrucción
+      explícita de esta sesión de apply de terminar con un commit real), pero
+      queda pendiente de esta confirmación antes de abrir el PR/mergear.

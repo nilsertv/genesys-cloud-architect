@@ -211,9 +211,39 @@ truncation behavior on large flows and `flowVersion` details.
 
 Same command as step 4 above, run against the update file.
 
-### 4. Update
+### 4. Update — two-call protocol (call 1: edit, call 2: confirm and publish)
 
-Use the `update_flow` MCP tool:
+`update_flow` never edits and publishes in the same call. It always requires
+two separate calls against the **same `flowId`**: call 1 applies your edit
+and checks in (never publishes); call 2 re-verifies nothing else changed and
+publishes. There is no `publish` flag and no single-call shortcut — this is
+intentional, so a human (or you) always reviews the diff before anything
+goes live.
+
+**Call 1 — apply the edit:**
+
+```
+Tool: update_flow
+Input: {
+  "flowFile": "./path/to/update.ts",
+  "flowId": "<existing-flow-id>",
+  "flowType": "inboundcall"
+}
+```
+
+`confirmPublish` defaults to `false`/absent, so this call checks out, applies
+your edit, checks in, and returns:
+- `Flow ID` / `Flow Name`
+- a **baseline file path** (`exports/<flowId>.baseline.yaml`) — a full
+  pre-edit export the tool captured automatically before any change
+- a **requested diff** summary — exactly what your edit changed, computed
+  against that baseline
+
+Read the diff. If it shows anything beyond what you intended to change, fix
+your update file and re-run call 1 (it always overwrites the previous
+baseline for that `flowId` — there is nothing to clean up manually).
+
+**Call 2 — confirm and publish:**
 
 ```
 Tool: update_flow
@@ -221,16 +251,42 @@ Input: {
   "flowFile": "./path/to/update.ts",
   "flowId": "<existing-flow-id>",
   "flowType": "inboundcall",
-  "publish": false
+  "confirmPublish": true
 }
 ```
 
-You must supply exactly one of `flowId` or `flowName`. **`flowType` is always required**, even when identifying the flow by `flowId` — the Architect Scripting SDK's checkout methods require it for both lookup paths.
+This re-checks out the flow, re-exports its live content, and diffs it
+against the **exact same original baseline** from call 1 — not against the
+requested diff, and not an optimistic-concurrency check against only what
+changed between the two calls. If that full-baseline diff shows anything
+beyond the edit call 1 produced (a third party's change in Architect, or
+even a different re-edit of the same path), the publish is **blocked
+unconditionally — there is no override flag**. The baseline file is
+preserved on a blocked or failed call so you can inspect it; it is deleted
+only after `publishAsync` actually succeeds. If blocked, resolve the drift
+and restart from call 1 against the same `flowId`.
+
+You must supply exactly one of `flowId` or `flowName` in both calls (prefer
+`flowId` — it fails fast on a missing baseline before taking any lock,
+whereas `flowName` can only check after checkout since the flow's id isn't
+known until then). **`flowType` is always required**, even when identifying
+the flow by `flowId` — the Architect Scripting SDK's checkout methods
+require it for both lookup paths.
 
 Other inputs:
-- `forceUnlock` (default `false`) — forcibly takes over a flow locked by another user, discarding their unsaved Architect UI edits. Only set this when the user explicitly asks to override someone else's lock.
-- `publish` (default `false`) — publish the flow after editing instead of just checking it in. Set this when the user wants the change live immediately (and needed to test a bot flow afterward).
+- `forceUnlock` (default `false`) — forcibly takes over a flow locked by
+  another user, discarding their unsaved Architect UI edits. Only set this
+  when the user explicitly asks to override someone else's lock.
 
-If the flow is locked by another user and `forceUnlock` wasn't set, the tool reports a distinct "locked" error — do not silently retry with `forceUnlock: true` without telling the user, since that discards someone else's unsaved work.
+If the flow is locked by another user and `forceUnlock` wasn't set, the tool
+reports a distinct "locked" error — do not silently retry with
+`forceUnlock: true` without telling the user, since that discards someone
+else's unsaved work.
 
-If `update_flow` fails and reports the flow lock was NOT automatically released, tell the user explicitly — they may need to manually unlock the flow in the Architect UI.
+If `update_flow` fails and reports the flow lock was NOT automatically
+released, tell the user explicitly — they may need to manually unlock the
+flow in the Architect UI.
+
+**Testing a bot flow after an update:** call 2 with `confirmPublish: true`
+is what publishes the flow, so run both calls (and confirm the diff is
+clean) before calling `test_bot_flow`.

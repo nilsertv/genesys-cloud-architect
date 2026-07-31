@@ -8,9 +8,17 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import {
     applyUpdateAndSave,
+    type BaselineEnvelope,
+    baselineFilePath,
+    deleteBaselineFile,
+    diffFlowYaml,
+    evaluateFlowDiffGate,
     exportFlowContent,
+    type FlowDiffResult,
+    readBaselineFile,
     resolveFlowIdentifier,
     truncateContent,
+    writeBaselineFile,
 } from "./update-helpers.ts";
 
 const TIMEOUT_MS = 90_000;
@@ -34,11 +42,27 @@ type LogLevel = "info" | "warn" | "error";
 // "locked-by-other-user" remains a provisional guess — not empirically
 // confirmed (requires a second real user/OAuth identity to hold a
 // conflicting lock, which was out of scope for solo verification).
+//
+// "no-baseline-found" and "unsolicited-changes-detected" originate entirely
+// in our own code (confirmAndPublishFlow), not the SDK — they are set
+// directly as an `errorKind` property on the thrown Error instead of being
+// regex-classified from a message, per design.md's Interfaces section.
 export type UpdateErrorKind =
     | "locked-by-other-user"
     | "not-found"
     | "type-mismatch"
+    | "no-baseline-found"
+    | "unsolicited-changes-detected"
     | "unknown";
+
+const KNOWN_ERROR_KINDS: readonly UpdateErrorKind[] = [
+    "locked-by-other-user",
+    "not-found",
+    "type-mismatch",
+    "no-baseline-found",
+    "unsolicited-changes-detected",
+    "unknown",
+];
 
 function emit(type: "log", level: LogLevel, message: string): void;
 function emit(
@@ -54,6 +78,9 @@ function emit(
         content?: string;
         fileName?: string;
         truncated?: boolean;
+        requestedDiff?: FlowDiffResult;
+        baselinePath?: string;
+        unrequestedPaths?: string[];
     },
 ): void;
 function emit(type: string, ...args: unknown[]): void {
@@ -333,8 +360,23 @@ function toArchitectSdkRegion(
 /**
  * Error classifier — see UpdateErrorKind's doc comment for what's empirically
  * confirmed vs. still provisional.
+ *
+ * Prefers a pre-set `errorKind` property on the thrown error (set directly
+ * by our own code — e.g. confirmAndPublishFlow's missing-baseline/blocked-diff
+ * errors) BEFORE falling back to regex classification of the message. Those
+ * two error kinds never originate from the SDK, so message-sniffing them
+ * would be both unnecessary and fragile.
  */
 function classifyUpdateError(err: unknown): UpdateErrorKind {
+    if (err && typeof err === "object" && "errorKind" in err) {
+        const preSet = (err as { errorKind?: unknown }).errorKind;
+        if (
+            typeof preSet === "string" &&
+            (KNOWN_ERROR_KINDS as readonly string[]).includes(preSet)
+        ) {
+            return preSet as UpdateErrorKind;
+        }
+    }
     const message = err instanceof Error ? err.message : String(err);
     if (/locked/i.test(message)) return "locked-by-other-user";
     // Empirically captured SDK text, real Genesys Cloud org:
@@ -372,6 +414,48 @@ function classifyUpdateError(err: unknown): UpdateErrorKind {
  * the flow file is already known-good, so no lock is ever taken that isn't
  * released.
  */
+/**
+ * Best-effort unlock helper for failures that happen BEFORE
+ * `applyUpdateAndSave`'s own try block begins (i.e. the checkout-time
+ * baseline capture in `updateFlow` below). Mirrors `applyUpdateAndSave`'s
+ * unlock-on-failure contract: attaches `unlocked: boolean` to the rethrown
+ * error instead of swallowing a second failure.
+ */
+async function unlockAndRethrow(
+    flow: { unlockAsync(): Promise<unknown> },
+    originalError: unknown,
+): Promise<never> {
+    let unlocked = true;
+    try {
+        await flow.unlockAsync();
+    } catch {
+        unlocked = false;
+    }
+    const carrier = (
+        originalError && typeof originalError === "object"
+            ? originalError
+            : new Error(String(originalError), { cause: originalError })
+    ) as { unlocked?: boolean };
+    carrier.unlocked = unlocked;
+    throw carrier;
+}
+
+/**
+ * Call 1 of the two-call `update_flow` protocol (`confirmPublish` not set).
+ *
+ * Checks out the flow, captures a full-baseline export IMMEDIATELY after
+ * checkout (before any edit runs — its own unlock-on-failure guard, since
+ * `applyUpdateAndSave`'s try block hasn't started yet), applies the user
+ * flow file's edits via `applyUpdateAndSave`'s mutate callback, captures a
+ * second "requested" snapshot right after the edit but before check-in, and
+ * persists both to `exports/<flowId>.baseline.yaml` (design.md's "Baseline
+ * write timing" decision: two separate writes, not one). Always checks in
+ * (`publish=false`) — this call MUST NOT publish under any circumstance.
+ *
+ * Returns the requested-delta (`diff(baseline, postEditSnapshot)`) and the
+ * baseline file path so the caller can inspect both before deciding to call
+ * `confirmAndPublishFlow`.
+ */
 export async function updateFlow(
     scripting: ArchitectScripting,
     absoluteFlowPath: string,
@@ -380,9 +464,14 @@ export async function updateFlow(
         flowName?: string;
         flowType?: string;
         forceUnlock?: boolean;
-        publish?: boolean;
+        exportsDir: string;
     },
-): Promise<{ flowId: string; flowName: string }> {
+): Promise<{
+    flowId: string;
+    flowName: string;
+    requestedDiff: FlowDiffResult;
+    baselinePath: string;
+}> {
     const identifier = resolveFlowIdentifier(opts);
 
     const flowType = opts.flowType;
@@ -405,6 +494,7 @@ export async function updateFlow(
 
     const forceUnlock = opts.forceUnlock ?? false;
     const { archFactoryFlows } = scripting.factories;
+    const { archEnums } = scripting.enums;
 
     emit(
         "log",
@@ -427,12 +517,190 @@ export async function updateFlow(
                   forceUnlock,
               );
 
-    const publish = opts.publish ?? false;
+    const baselinePath = baselineFilePath(opts.exportsDir, flow.id);
+
+    let originalContent: string;
+    try {
+        const exportedOriginal = await exportFlowContent(
+            flow,
+            archEnums.FLOW_FORMAT_TYPES.yaml,
+        );
+        originalContent = exportedOriginal.content;
+        await writeBaselineFile(baselinePath, {
+            flowId: flow.id,
+            capturedAt: new Date().toISOString(),
+            originalContent,
+        });
+    } catch (err) {
+        return unlockAndRethrow(flow, err);
+    }
+
+    let requestedDiff: FlowDiffResult | undefined;
     await applyUpdateAndSave(
         flow,
-        (f) => mod.updateFlow(scripting, f),
-        publish,
+        async (f) => {
+            await mod.updateFlow(scripting, f);
+            const exportedRequested = await exportFlowContent(
+                flow,
+                archEnums.FLOW_FORMAT_TYPES.yaml,
+            );
+            requestedDiff = diffFlowYaml(
+                originalContent,
+                exportedRequested.content,
+            );
+            const envelope: BaselineEnvelope = {
+                flowId: flow.id,
+                capturedAt: new Date().toISOString(),
+                originalContent,
+                requestedContent: exportedRequested.content,
+            };
+            await writeBaselineFile(baselinePath, envelope);
+        },
+        false,
     );
+
+    return {
+        flowId: flow.id,
+        flowName: flow.name,
+        // Non-null: the mutate callback above always assigns it before
+        // applyUpdateAndSave resolves successfully.
+        requestedDiff: requestedDiff as FlowDiffResult,
+        baselinePath,
+    };
+}
+
+/**
+ * Call 2 of the two-call `update_flow` protocol (`confirmPublish: true`).
+ *
+ * Re-checks out the flow, re-exports its live content, and reuses
+ * `applyUpdateAndSave` with a VERIFY callback in place of a mutate callback
+ * (design.md's "Call 2 implementation" decision: this is the same
+ * `mutate: (flow) => Promise<unknown>` slot — it just verifies instead of
+ * editing, throwing to trigger the exact same unlock-on-failure guarantee).
+ * The verify step diffs the live content against the full original baseline
+ * and runs `evaluateFlowDiffGate`; only a clean gate lets `applyUpdateAndSave`
+ * proceed to `publishAsync` instead of `checkInAsync`.
+ *
+ * On the `flowId` path, the baseline is read BEFORE checkout so a missing
+ * baseline fails fast without ever taking the lock. On the `flowName` path,
+ * the flow's real id (and therefore the baseline path) is only known after
+ * checkout succeeds, so the missing-baseline check is necessarily deferred
+ * until inside the verify callback (see design.md's Open Questions).
+ *
+ * The baseline file is deleted ONLY after `publishAsync` completes
+ * successfully — never on a blocked or failed attempt (design.md's
+ * "Baseline Cleanup Tied to Publish Success Only" requirement).
+ */
+export async function confirmAndPublishFlow(
+    scripting: ArchitectScripting,
+    opts: {
+        flowId?: string;
+        flowName?: string;
+        flowType?: string;
+        forceUnlock?: boolean;
+        exportsDir: string;
+    },
+): Promise<{ flowId: string; flowName: string }> {
+    const identifier = resolveFlowIdentifier(opts);
+
+    const flowType = opts.flowType;
+    if (!flowType) {
+        throw new Error(
+            "flowType is required by the Architect Scripting SDK for both " +
+                "checkoutAndLoadFlowByFlowIdAsync and checkoutAndLoadFlowByFlowNameAsync " +
+                "— provide it even when identifying the flow by flowId.",
+        );
+    }
+
+    let baselinePath: string | undefined;
+    let baseline: BaselineEnvelope | undefined;
+
+    if (identifier.kind === "byId") {
+        baselinePath = baselineFilePath(opts.exportsDir, identifier.flowId);
+        baseline = await readBaselineFile(baselinePath);
+        if (!baseline) {
+            const err = new Error(
+                `No baseline found for flowId ${identifier.flowId}. Call update_flow ` +
+                    "without confirmPublish first to capture one.",
+            ) as Error & { errorKind: UpdateErrorKind };
+            err.errorKind = "no-baseline-found";
+            throw err;
+        }
+    }
+
+    const forceUnlock = opts.forceUnlock ?? false;
+    const { archFactoryFlows } = scripting.factories;
+    const { archEnums } = scripting.enums;
+
+    emit(
+        "log",
+        "info",
+        identifier.kind === "byId"
+            ? `Re-checking out flow by id to confirm publish: ${identifier.flowId}`
+            : `Re-checking out flow by name to confirm publish: ${identifier.flowName} (${identifier.flowType})`,
+    );
+
+    const flow =
+        identifier.kind === "byId"
+            ? await archFactoryFlows.checkoutAndLoadFlowByFlowIdAsync(
+                  identifier.flowId,
+                  flowType,
+                  forceUnlock,
+              )
+            : await archFactoryFlows.checkoutAndLoadFlowByFlowNameAsync(
+                  identifier.flowName,
+                  identifier.flowType,
+                  forceUnlock,
+              );
+
+    if (identifier.kind === "byName") {
+        baselinePath = baselineFilePath(opts.exportsDir, flow.id);
+        baseline = await readBaselineFile(baselinePath);
+    }
+
+    await applyUpdateAndSave(
+        flow,
+        async () => {
+            if (!baseline) {
+                const err = new Error(
+                    `No baseline found for flow ${flow.id}. Call update_flow ` +
+                        "without confirmPublish first to capture one.",
+                ) as Error & { errorKind: UpdateErrorKind };
+                err.errorKind = "no-baseline-found";
+                throw err;
+            }
+            const liveExport = await exportFlowContent(
+                flow,
+                archEnums.FLOW_FORMAT_TYPES.yaml,
+            );
+            const requestedDiff = diffFlowYaml(
+                baseline.originalContent,
+                baseline.requestedContent ?? baseline.originalContent,
+            );
+            const confirmDiff = diffFlowYaml(
+                baseline.originalContent,
+                liveExport.content,
+            );
+            const gate = evaluateFlowDiffGate(requestedDiff, confirmDiff);
+            if (gate.blocked) {
+                const err = new Error(
+                    "Publish blocked: unsolicited changes detected outside " +
+                        `the requested edit at path(s): ${gate.unrequestedPaths.join(", ")}`,
+                ) as Error & {
+                    errorKind: UpdateErrorKind;
+                    unrequestedPaths: string[];
+                };
+                err.errorKind = "unsolicited-changes-detected";
+                err.unrequestedPaths = gate.unrequestedPaths;
+                throw err;
+            }
+        },
+        true,
+    );
+
+    // Non-null: reached only when the verify callback above did not throw,
+    // which requires `baseline` to have been set.
+    await deleteBaselineFile(baselinePath as string);
 
     return {
         flowId: flow.id,
@@ -556,7 +824,8 @@ async function main(): Promise<void> {
             "flow-type": { type: "string" },
             "flow-version": { type: "string" },
             "force-unlock": { type: "boolean", default: false },
-            publish: { type: "boolean", default: false },
+            "confirm-publish": { type: "boolean", default: false },
+            "exports-dir": { type: "string" },
         },
         strict: true,
     });
@@ -638,30 +907,62 @@ async function main(): Promise<void> {
     });
 
     if (mode === "update") {
-        try {
-            // Non-null: guaranteed by the mode!=="read" guard above.
-            const result = await updateFlow(scripting, absoluteFlowPath!, {
-                flowId: values["flow-id"],
-                flowName: values["flow-name"],
-                flowType: values["flow-type"],
-                forceUnlock: values["force-unlock"],
-                publish: values.publish,
-            });
+        const exportsDir = values["exports-dir"];
+        if (!exportsDir) {
             emit("result", {
-                success: true,
-                flowId: result.flowId,
-                flowName: result.flowName,
+                success: false,
+                error: "Missing --exports-dir argument (required in update mode).",
             });
+            process.exit(1);
+        }
+
+        const confirmPublish = values["confirm-publish"];
+
+        try {
+            if (confirmPublish) {
+                const result = await confirmAndPublishFlow(scripting, {
+                    flowId: values["flow-id"],
+                    flowName: values["flow-name"],
+                    flowType: values["flow-type"],
+                    forceUnlock: values["force-unlock"],
+                    exportsDir,
+                });
+                emit("result", {
+                    success: true,
+                    flowId: result.flowId,
+                    flowName: result.flowName,
+                });
+            } else {
+                // Non-null: guaranteed by the mode!=="read" guard above.
+                const result = await updateFlow(scripting, absoluteFlowPath!, {
+                    flowId: values["flow-id"],
+                    flowName: values["flow-name"],
+                    flowType: values["flow-type"],
+                    forceUnlock: values["force-unlock"],
+                    exportsDir,
+                });
+                emit("result", {
+                    success: true,
+                    flowId: result.flowId,
+                    flowName: result.flowName,
+                    requestedDiff: result.requestedDiff,
+                    baselinePath: result.baselinePath,
+                });
+            }
         } catch (err) {
             const unlocked = (err as { unlocked?: boolean } | undefined)
                 ?.unlocked;
             const errorKind = classifyUpdateError(err);
+            const unrequestedPaths = (
+                err as { unrequestedPaths?: string[] } | undefined
+            )?.unrequestedPaths;
             const message = err instanceof Error ? err.message : String(err);
             emit("result", {
                 success: false,
                 error: message,
                 unlocked,
                 errorKind,
+                unrequestedPaths,
             });
         } finally {
             session.endExitCode = 0;

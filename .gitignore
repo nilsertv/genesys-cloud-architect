@@ -6,3 +6,4 @@ skills-lock.json
 .agents/
 .pnpm-store
 *.dev.ts
+exports/
