@@ -9,22 +9,22 @@ review_budget_lines: 400
 phases:
   explore:
     status: done
-    artifact: openspec/changes/update-flow-safeguards/exploration.md
+    artifact: openspec/changes/archive/2026-07-31-update-flow-safeguards/exploration.md
   proposal:
     status: done
-    artifact: openspec/changes/update-flow-safeguards/proposal.md
+    artifact: openspec/changes/archive/2026-07-31-update-flow-safeguards/proposal.md
   design:
     status: done
-    artifact: openspec/changes/update-flow-safeguards/design.md
+    artifact: openspec/changes/archive/2026-07-31-update-flow-safeguards/design.md
   specs:
     status: done
-    artifact: openspec/changes/update-flow-safeguards/specs/update-flow-safeguards/spec.md
+    artifact: openspec/changes/archive/2026-07-31-update-flow-safeguards/specs/update-flow-safeguards/spec.md
   tasks:
     status: done
-    artifact: openspec/changes/update-flow-safeguards/tasks.md
+    artifact: openspec/changes/archive/2026-07-31-update-flow-safeguards/tasks.md
   apply:
     status: done
-    artifact: openspec/changes/update-flow-safeguards/apply-progress.md
+    artifact: openspec/changes/archive/2026-07-31-update-flow-safeguards/apply-progress.md
     note: >
       All 25/25 tasks complete, including the 4 empirical real-org tasks
       (1.6, 2.5, 3.9, 3.10) — run against org "Calidda", flow
@@ -40,7 +40,7 @@ phases:
       path and the hard-block path (simulated drift via a tampered
       persisted baseline file), with correct `errorKind`,
       `unrequestedPaths`, baseline preservation, and unlock behavior in
-      both cases (3.9); `.mcp.json` sets no `cwd` override, so the MCP
+      both cases (3.9); `.mcp.json` has no `cwd` override, so the MCP
       server inherits Claude Code's own `process.cwd()` at spawn time,
       confirmed via config inspection (3.10). One real bug found and fixed
       during this empirical pass: the CLI's `--flow-file` guard didn't
@@ -83,7 +83,7 @@ phases:
       confirmation before this PR is merge-ready.
   verify:
     status: done
-    artifact: openspec/changes/update-flow-safeguards/verify-report.md
+    artifact: openspec/changes/archive/2026-07-31-update-flow-safeguards/verify-report.md
     note: >
       PASS WITH WARNINGS. 0 CRITICAL, 2 WARNING (formatDiffSummary has no
       dedicated unit test; PR2/PR3 not yet opened as GitHub PRs), 1
@@ -95,6 +95,9 @@ phases:
       class). Hard-block-no-override confirmed via full source read of
       evaluateFlowDiffGate — no bypass parameter anywhere. Ready for
       sdd-archive.
+  archive:
+    status: done
+    artifact: openspec/changes/archive/2026-07-31-update-flow-safeguards/
 
 open_decisions:
   - id: same-name-vs-fork
