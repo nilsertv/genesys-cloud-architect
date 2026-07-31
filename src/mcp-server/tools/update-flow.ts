@@ -4,6 +4,18 @@ import path from "node:path";
 import { z } from "zod/v3";
 import type { ToolFactory } from "./types.ts";
 
+interface FlowDiffEntry {
+    path: string;
+    oldValue?: unknown;
+    newValue?: unknown;
+}
+
+interface FlowDiffResult {
+    changed: FlowDiffEntry[];
+    added: FlowDiffEntry[];
+    removed: FlowDiffEntry[];
+}
+
 interface UpdateRunnerLine {
     type: "log" | "result";
     level?: string;
@@ -18,7 +30,12 @@ interface UpdateRunnerLine {
         | "locked-by-other-user"
         | "not-found"
         | "type-mismatch"
+        | "no-baseline-found"
+        | "unsolicited-changes-detected"
         | "unknown";
+    requestedDiff?: FlowDiffResult;
+    baselinePath?: string;
+    unrequestedPaths?: string[];
 }
 
 const UPDATE_TIMEOUT_MS = 120_000;
@@ -39,9 +56,40 @@ const ERROR_KIND_MESSAGES: Record<
     // src/deploy-runner/index.ts. A mismatched flowType always surfaces as
     // "not-found" instead.
     "type-mismatch": "flowType does not match the existing flow's type.",
+    "no-baseline-found":
+        "No baseline found for this flow. Call update_flow without confirmPublish first to capture one before confirming.",
+    // "unsolicited-changes-detected" gets a dedicated message built from
+    // `unrequestedPaths` at the call site below, not this static map.
+    "unsolicited-changes-detected": undefined,
     // "unknown" falls through to the raw SDK error message, unmodified.
     unknown: undefined,
 };
+
+/**
+ * Renders a `FlowDiffResult` (call 1's `diff(baseline, postEditSnapshot)`)
+ * as a short human-readable summary for the tool response, so the caller can
+ * review exactly what the edit touched before deciding to confirm publish.
+ */
+function formatDiffSummary(diff: FlowDiffResult | undefined): string {
+    if (
+        !diff ||
+        (diff.changed.length === 0 &&
+            diff.added.length === 0 &&
+            diff.removed.length === 0)
+    ) {
+        return "\nRequested diff: no changes detected.";
+    }
+    const lines = ["\nRequested diff:"];
+    for (const entry of diff.changed)
+        lines.push(
+            `  ~ ${entry.path}: ${JSON.stringify(entry.oldValue)} -> ${JSON.stringify(entry.newValue)}`,
+        );
+    for (const entry of diff.added)
+        lines.push(`  + ${entry.path}: ${JSON.stringify(entry.newValue)}`);
+    for (const entry of diff.removed)
+        lines.push(`  - ${entry.path}: ${JSON.stringify(entry.oldValue)}`);
+    return lines.join("\n");
+}
 
 export interface UpdateFlowConfig {
     readonly deployScriptPath: string;
@@ -95,24 +143,36 @@ const inputSchema = {
         .describe(
             "Forcibly unlock a flow held by another user before editing — discards their unsaved Architect UI edits",
         ),
-    publish: z
+    confirmPublish: z
         .boolean()
         .default(false)
         .describe(
-            "Publish the flow after editing instead of just checking it in",
+            "Two-call protocol, call 2: re-checks out the flow, re-runs the " +
+                "full-baseline diff gate against the baseline captured by call " +
+                "1 (confirmPublish not set), and publishes only if the diff is " +
+                "clean. Call 1 never publishes regardless of this flag's " +
+                "absence — there is no single-call publish path.",
         ),
 };
 
 export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
     config: {
         description:
-            "Edits an existing Genesys Cloud Architect flow in place (checkout, " +
-            "apply edits, check-in or publish) WITHOUT deleting or recreating it — " +
-            "unlike deploy_flow, this never resets version history or the flow ID. " +
-            "The file must export an async updateFlow(scripting, flow) function " +
-            "that mutates the already-checked-out flow using the Architect " +
-            "Scripting SDK; it must not call checkInAsync/publishAsync itself. " +
-            'The project\'s package.json must have "type": "module" for the ES module import to work.',
+            "Edits an existing Genesys Cloud Architect flow in place " +
+            "WITHOUT deleting or recreating it — unlike deploy_flow, this " +
+            "never resets version history or the flow ID. Publishing " +
+            "requires a mandatory two-call protocol: call 1 (confirmPublish " +
+            "not set) checks out, applies edits, checks in, and returns a " +
+            "diff summary plus a baseline file path — it never publishes. " +
+            "Call 2 (confirmPublish: true) re-checks out, re-diffs the live " +
+            "flow against that same baseline, and publishes only if nothing " +
+            "changed beyond the requested edit; any unrequested delta blocks " +
+            "the publish unconditionally, with no override. The file must " +
+            "export an async updateFlow(scripting, flow) function that " +
+            "mutates the already-checked-out flow using the Architect " +
+            "Scripting SDK; it must not call checkInAsync/publishAsync " +
+            'itself. The project\'s package.json must have "type": "module" ' +
+            "for the ES module import to work.",
         annotations: {
             title: "Update Flow",
             readOnlyHint: false,
@@ -121,15 +181,21 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
         inputSchema,
     },
     handler: async (args) => {
-        const { flowFile, flowId, flowName, flowType, forceUnlock, publish } =
-            args as {
-                flowFile: string;
-                flowId?: string;
-                flowName?: string;
-                flowType: string;
-                forceUnlock: boolean;
-                publish: boolean;
-            };
+        const {
+            flowFile,
+            flowId,
+            flowName,
+            flowType,
+            forceUnlock,
+            confirmPublish,
+        } = args as {
+            flowFile: string;
+            flowId?: string;
+            flowName?: string;
+            flowType: string;
+            forceUnlock: boolean;
+            confirmPublish: boolean;
+        };
 
         if (Boolean(flowId) === Boolean(flowName)) {
             return {
@@ -158,6 +224,12 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
             };
         }
 
+        // Computed from the MCP server process's own cwd, not the flow
+        // file's directory — a flow file can live in a subdirectory, and
+        // `exports/` must stay anchored at the real project root (see
+        // design.md's "Exports directory" decision).
+        const exportsDir = path.join(process.cwd(), "exports");
+
         const nodeArgs = [
             toolConfig.deployScriptPath,
             "--mode",
@@ -166,6 +238,8 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
             absolutePath,
             "--flow-type",
             flowType,
+            "--exports-dir",
+            exportsDir,
         ];
         if (flowId) {
             nodeArgs.push("--flow-id", flowId);
@@ -175,8 +249,8 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
         if (forceUnlock) {
             nodeArgs.push("--force-unlock");
         }
-        if (publish) {
-            nodeArgs.push("--publish");
+        if (confirmPublish) {
+            nodeArgs.push("--confirm-publish");
         }
 
         return new Promise((resolve) => {
@@ -282,8 +356,18 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
                     if (resultLine.flowName)
                         parts.push(`Flow Name: ${resultLine.flowName}`);
                     parts.push(
-                        publish ? "Published." : "Checked in (not published).",
+                        confirmPublish
+                            ? "Published."
+                            : "Checked in (not published).",
                     );
+                    if (!confirmPublish && resultLine.baselinePath) {
+                        parts.push(`Baseline file: ${resultLine.baselinePath}`);
+                        parts.push(formatDiffSummary(resultLine.requestedDiff));
+                        parts.push(
+                            "\nReview the diff above, then call update_flow " +
+                                "again with confirmPublish: true (same flowId) to publish.",
+                        );
+                    }
                     if (resultLine.warnings?.length)
                         parts.push(
                             `\nValidation warnings:\n${resultLine.warnings.join("\n")}`,
@@ -303,7 +387,13 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
                         errorKind !== undefined
                             ? ERROR_KIND_MESSAGES[errorKind]
                             : undefined;
+                    const unrequestedNote =
+                        errorKind === "unsolicited-changes-detected" &&
+                        resultLine?.unrequestedPaths?.length
+                            ? `Publish blocked: unsolicited changes detected outside the requested edit at path(s): ${resultLine.unrequestedPaths.join(", ")}. The baseline file was preserved — restart from call 1 (confirmPublish not set) against the same flowId.`
+                            : undefined;
                     const errorMsg =
+                        unrequestedNote ??
                         mapped ??
                         resultLine?.error ??
                         `Update runner exited with code ${code}`;

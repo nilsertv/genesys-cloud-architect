@@ -124242,16 +124242,19 @@ ${e3.stack}`, n3 = [this].concat(i3);
 // src/deploy-runner/index.ts
 var index_exports = {};
 __export(index_exports, {
+  confirmAndPublishFlow: () => confirmAndPublishFlow,
   readFlow: () => readFlow,
   updateFlow: () => updateFlow
 });
 module.exports = __toCommonJS(index_exports);
 var import_node_https = __toESM(require("node:https"));
-var import_node_path = __toESM(require("node:path"));
+var import_node_path2 = __toESM(require("node:path"));
 var import_node_url = require("node:url");
 var import_node_util = require("node:util");
 
 // src/deploy-runner/update-helpers.ts
+var import_promises = require("node:fs/promises");
+var import_node_path = require("node:path");
 var import_yaml = __toESM(require_dist());
 function resolveFlowIdentifier(opts) {
   if (opts.flowId) {
@@ -124313,9 +124316,145 @@ async function exportFlowContent(flow, flowFormat) {
   }
   return exported;
 }
+function baselineFilePath(exportsDir, flowId) {
+  if (flowId.includes("/") || flowId.includes("\\") || flowId.includes("..")) {
+    throw new Error(
+      `Unsafe flowId for baseline file path: ${JSON.stringify(flowId)}`
+    );
+  }
+  return (0, import_node_path.join)(exportsDir, `${flowId}.baseline.yaml`);
+}
+async function writeBaselineFile(filePath, envelope) {
+  await (0, import_promises.writeFile)(filePath, (0, import_yaml.stringify)(envelope), "utf8");
+}
+async function readBaselineFile(filePath) {
+  let raw;
+  try {
+    raw = await (0, import_promises.readFile)(filePath, "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return void 0;
+    }
+    throw error;
+  }
+  return (0, import_yaml.parse)(raw);
+}
+async function deleteBaselineFile(filePath) {
+  try {
+    await (0, import_promises.rm)(filePath);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+}
+function flattenFlowYaml(value, path2, out) {
+  if (value === null || typeof value !== "object") {
+    out.set(path2, value);
+    return;
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      out.set(path2, value);
+      return;
+    }
+    value.forEach((item, index) => {
+      const key = arrayElementKey(item, index);
+      flattenFlowYaml(item, `${path2}[${key}]`, out);
+    });
+    return;
+  }
+  const obj = value;
+  const keys = Object.keys(obj);
+  if (keys.length === 0) {
+    out.set(path2, obj);
+    return;
+  }
+  for (const key of keys) {
+    flattenFlowYaml(obj[key], path2 ? `${path2}.${key}` : key, out);
+  }
+}
+function arrayElementKey(item, index) {
+  if (item !== null && typeof item === "object" && !Array.isArray(item)) {
+    const record = item;
+    if (typeof record.name === "string") {
+      return `name=${record.name}`;
+    }
+    if (typeof record.id === "string") {
+      return `id=${record.id}`;
+    }
+  }
+  return String(index);
+}
+function leafValuesEqual(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+function diffFlowYaml(baselineYaml, candidateYaml) {
+  const baseline = /* @__PURE__ */ new Map();
+  const candidate = /* @__PURE__ */ new Map();
+  flattenFlowYaml((0, import_yaml.parse)(baselineYaml), "", baseline);
+  flattenFlowYaml((0, import_yaml.parse)(candidateYaml), "", candidate);
+  const changed = [];
+  const added = [];
+  const removed = [];
+  for (const [path2, oldValue] of baseline) {
+    if (!candidate.has(path2)) {
+      removed.push({ path: path2, oldValue });
+      continue;
+    }
+    const newValue = candidate.get(path2);
+    if (!leafValuesEqual(oldValue, newValue)) {
+      changed.push({ path: path2, oldValue, newValue });
+    }
+  }
+  for (const [path2, newValue] of candidate) {
+    if (!baseline.has(path2)) {
+      added.push({ path: path2, newValue });
+    }
+  }
+  return { changed, added, removed };
+}
+var KNOWN_VOLATILE_FLOW_PATHS = [];
+function resolveDeltas(diff) {
+  const resolved = /* @__PURE__ */ new Map();
+  for (const entry of diff.added) {
+    resolved.set(entry.path, { kind: "added", value: entry.newValue });
+  }
+  for (const entry of diff.removed) {
+    resolved.set(entry.path, { kind: "removed", value: void 0 });
+  }
+  for (const entry of diff.changed) {
+    resolved.set(entry.path, { kind: "changed", value: entry.newValue });
+  }
+  return resolved;
+}
+function evaluateFlowDiffGate(requestedDiff, confirmDiff, volatilePaths = KNOWN_VOLATILE_FLOW_PATHS) {
+  const requested = resolveDeltas(requestedDiff);
+  const confirmed = resolveDeltas(confirmDiff);
+  const unrequestedPaths = [];
+  for (const [path2, confirmDelta] of confirmed) {
+    if (volatilePaths.includes(path2)) {
+      continue;
+    }
+    const requestedDelta = requested.get(path2);
+    if (!requestedDelta || requestedDelta.kind !== confirmDelta.kind || !leafValuesEqual(requestedDelta.value, confirmDelta.value)) {
+      unrequestedPaths.push(path2);
+    }
+  }
+  return { blocked: unrequestedPaths.length > 0, unrequestedPaths };
+}
 
 // src/deploy-runner/index.ts
 var TIMEOUT_MS = 9e4;
+var KNOWN_ERROR_KINDS = [
+  "locked-by-other-user",
+  "not-found",
+  "type-mismatch",
+  "no-baseline-found",
+  "unsolicited-changes-detected",
+  "unknown"
+];
 function emit(type, ...args) {
   if (type === "log") {
     const [level, message] = args;
@@ -124507,6 +124646,12 @@ function toArchitectSdkRegion(scripting, apiDomain) {
   return void 0;
 }
 function classifyUpdateError(err) {
+  if (err && typeof err === "object" && "errorKind" in err) {
+    const preSet = err.errorKind;
+    if (typeof preSet === "string" && KNOWN_ERROR_KINDS.includes(preSet)) {
+      return preSet;
+    }
+  }
   const message = err instanceof Error ? err.message : String(err);
   if (/locked/i.test(message)) return "locked-by-other-user";
   if (/could not find|not[\s-]?found|does not exist|architect\.flow\.not\.found|no matches/i.test(
@@ -124514,6 +124659,17 @@ function classifyUpdateError(err) {
   ))
     return "not-found";
   return "unknown";
+}
+async function unlockAndRethrow(flow, originalError) {
+  let unlocked = true;
+  try {
+    await flow.unlockAsync();
+  } catch {
+    unlocked = false;
+  }
+  const carrier = originalError && typeof originalError === "object" ? originalError : new Error(String(originalError), { cause: originalError });
+  carrier.unlocked = unlocked;
+  throw carrier;
 }
 async function updateFlow(scripting, absoluteFlowPath, opts) {
   const identifier = resolveFlowIdentifier(opts);
@@ -124532,6 +124688,7 @@ async function updateFlow(scripting, absoluteFlowPath, opts) {
   }
   const forceUnlock = opts.forceUnlock ?? false;
   const { archFactoryFlows } = scripting.factories;
+  const { archEnums } = scripting.enums;
   emit(
     "log",
     "info",
@@ -124546,12 +124703,131 @@ async function updateFlow(scripting, absoluteFlowPath, opts) {
     identifier.flowType,
     forceUnlock
   );
-  const publish = opts.publish ?? false;
+  const baselinePath = baselineFilePath(opts.exportsDir, flow.id);
+  let originalContent;
+  try {
+    const exportedOriginal = await exportFlowContent(
+      flow,
+      archEnums.FLOW_FORMAT_TYPES.yaml
+    );
+    originalContent = exportedOriginal.content;
+    await writeBaselineFile(baselinePath, {
+      flowId: flow.id,
+      capturedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      originalContent
+    });
+  } catch (err) {
+    return unlockAndRethrow(flow, err);
+  }
+  let requestedDiff;
   await applyUpdateAndSave(
     flow,
-    (f) => mod.updateFlow(scripting, f),
-    publish
+    async (f) => {
+      await mod.updateFlow(scripting, f);
+      const exportedRequested = await exportFlowContent(
+        flow,
+        archEnums.FLOW_FORMAT_TYPES.yaml
+      );
+      requestedDiff = diffFlowYaml(
+        originalContent,
+        exportedRequested.content
+      );
+      const envelope = {
+        flowId: flow.id,
+        capturedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        originalContent,
+        requestedContent: exportedRequested.content
+      };
+      await writeBaselineFile(baselinePath, envelope);
+    },
+    false
   );
+  return {
+    flowId: flow.id,
+    flowName: flow.name,
+    // Non-null: the mutate callback above always assigns it before
+    // applyUpdateAndSave resolves successfully.
+    requestedDiff,
+    baselinePath
+  };
+}
+async function confirmAndPublishFlow(scripting, opts) {
+  const identifier = resolveFlowIdentifier(opts);
+  const flowType = opts.flowType;
+  if (!flowType) {
+    throw new Error(
+      "flowType is required by the Architect Scripting SDK for both checkoutAndLoadFlowByFlowIdAsync and checkoutAndLoadFlowByFlowNameAsync \u2014 provide it even when identifying the flow by flowId."
+    );
+  }
+  let baselinePath;
+  let baseline;
+  if (identifier.kind === "byId") {
+    baselinePath = baselineFilePath(opts.exportsDir, identifier.flowId);
+    baseline = await readBaselineFile(baselinePath);
+    if (!baseline) {
+      const err = new Error(
+        `No baseline found for flowId ${identifier.flowId}. Call update_flow without confirmPublish first to capture one.`
+      );
+      err.errorKind = "no-baseline-found";
+      throw err;
+    }
+  }
+  const forceUnlock = opts.forceUnlock ?? false;
+  const { archFactoryFlows } = scripting.factories;
+  const { archEnums } = scripting.enums;
+  emit(
+    "log",
+    "info",
+    identifier.kind === "byId" ? `Re-checking out flow by id to confirm publish: ${identifier.flowId}` : `Re-checking out flow by name to confirm publish: ${identifier.flowName} (${identifier.flowType})`
+  );
+  const flow = identifier.kind === "byId" ? await archFactoryFlows.checkoutAndLoadFlowByFlowIdAsync(
+    identifier.flowId,
+    flowType,
+    forceUnlock
+  ) : await archFactoryFlows.checkoutAndLoadFlowByFlowNameAsync(
+    identifier.flowName,
+    identifier.flowType,
+    forceUnlock
+  );
+  if (identifier.kind === "byName") {
+    baselinePath = baselineFilePath(opts.exportsDir, flow.id);
+    baseline = await readBaselineFile(baselinePath);
+  }
+  await applyUpdateAndSave(
+    flow,
+    async () => {
+      if (!baseline) {
+        const err = new Error(
+          `No baseline found for flow ${flow.id}. Call update_flow without confirmPublish first to capture one.`
+        );
+        err.errorKind = "no-baseline-found";
+        throw err;
+      }
+      const liveExport = await exportFlowContent(
+        flow,
+        archEnums.FLOW_FORMAT_TYPES.yaml
+      );
+      const requestedDiff = diffFlowYaml(
+        baseline.originalContent,
+        baseline.requestedContent ?? baseline.originalContent
+      );
+      const confirmDiff = diffFlowYaml(
+        baseline.originalContent,
+        liveExport.content
+      );
+      const gate = evaluateFlowDiffGate(requestedDiff, confirmDiff);
+      if (gate.blocked) {
+        const err = new Error(
+          `Publish blocked: unsolicited changes detected outside the requested edit at path(s): ${gate.unrequestedPaths.join(", ")}`
+        );
+        err.errorKind = "unsolicited-changes-detected";
+        err.unrequestedPaths = gate.unrequestedPaths;
+        throw err;
+      }
+    },
+    true
+  );
+  await deleteBaselineFile(baselinePath);
   return {
     flowId: flow.id,
     flowName: flow.name
@@ -124610,7 +124886,8 @@ async function main() {
       "flow-type": { type: "string" },
       "flow-version": { type: "string" },
       "force-unlock": { type: "boolean", default: false },
-      publish: { type: "boolean", default: false }
+      "confirm-publish": { type: "boolean", default: false },
+      "exports-dir": { type: "string" }
     },
     strict: true
   });
@@ -124624,14 +124901,15 @@ async function main() {
     process.exit(1);
   }
   const mode = rawMode === "update" ? "update" : rawMode === "read" ? "read" : "create";
-  if (mode !== "read" && !flowFile) {
+  const isConfirmPublishCall = mode === "update" && values["confirm-publish"];
+  if (mode !== "read" && !isConfirmPublishCall && !flowFile) {
     emit("result", {
       success: false,
       error: "Missing --flow-file argument"
     });
     process.exit(1);
   }
-  const absoluteFlowPath = flowFile ? import_node_path.default.resolve(flowFile) : void 0;
+  const absoluteFlowPath = flowFile ? import_node_path2.default.resolve(flowFile) : void 0;
   const region = process.env.GENESYS_REGION;
   const clientId = process.env.GENESYS_CLIENT_ID;
   const clientSecret = process.env.GENESYS_CLIENT_SECRET;
@@ -124660,28 +124938,56 @@ async function main() {
     clientSecret
   });
   if (mode === "update") {
-    try {
-      const result = await updateFlow(scripting, absoluteFlowPath, {
-        flowId: values["flow-id"],
-        flowName: values["flow-name"],
-        flowType: values["flow-type"],
-        forceUnlock: values["force-unlock"],
-        publish: values.publish
-      });
+    const exportsDir = values["exports-dir"];
+    if (!exportsDir) {
       emit("result", {
-        success: true,
-        flowId: result.flowId,
-        flowName: result.flowName
+        success: false,
+        error: "Missing --exports-dir argument (required in update mode)."
       });
+      process.exit(1);
+    }
+    const confirmPublish = values["confirm-publish"];
+    try {
+      if (confirmPublish) {
+        const result = await confirmAndPublishFlow(scripting, {
+          flowId: values["flow-id"],
+          flowName: values["flow-name"],
+          flowType: values["flow-type"],
+          forceUnlock: values["force-unlock"],
+          exportsDir
+        });
+        emit("result", {
+          success: true,
+          flowId: result.flowId,
+          flowName: result.flowName
+        });
+      } else {
+        const result = await updateFlow(scripting, absoluteFlowPath, {
+          flowId: values["flow-id"],
+          flowName: values["flow-name"],
+          flowType: values["flow-type"],
+          forceUnlock: values["force-unlock"],
+          exportsDir
+        });
+        emit("result", {
+          success: true,
+          flowId: result.flowId,
+          flowName: result.flowName,
+          requestedDiff: result.requestedDiff,
+          baselinePath: result.baselinePath
+        });
+      }
     } catch (err) {
       const unlocked = err?.unlocked;
       const errorKind = classifyUpdateError(err);
+      const unrequestedPaths = err?.unrequestedPaths;
       const message = err instanceof Error ? err.message : String(err);
       emit("result", {
         success: false,
         error: message,
         unlocked,
-        errorKind
+        errorKind,
+        unrequestedPaths
       });
     } finally {
       session.endExitCode = 0;
@@ -124790,6 +125096,7 @@ main().then(() => process.exit(0)).catch((err) => {
 });
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  confirmAndPublishFlow,
   readFlow,
   updateFlow
 });
