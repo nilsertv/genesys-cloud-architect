@@ -93,6 +93,12 @@ open_decisions:
     recommendation: "Solo al publicar con éxito, sin TTL"
     confirmed: true
     decision: "delete-on-success-only-no-ttl"
+  - id: pr2-size-exception
+    question: "PR2 (diffFlowYaml + evaluateFlowDiffGate) midió 479 líneas reales, sobre el presupuesto de 400 (ask-on-risk). ¿Aceptar excepción o partir en dos?"
+    recommendation: "Aceptar excepción — diffFlowYaml y evaluateFlowDiffGate están directamente acoplados (el gate consume el diff), partirlos sería artificial"
+    confirmed: true
+    decision: "size-exception-accepted"
+    note: "PR2 ya está confirmado (commit df208b0) como una sola unidad. No se reescribe el historial."
   - id: publish-flag-removal
     question: "¿El parámetro `publish: boolean` de update_flow se elimina por completo (breaking change, siempre 2 llamadas), o se mantiene como atajo de compatibilidad que ejecuta ambas llamadas internamente?"
     recommendation: "Eliminar por completo, forzar siempre las 2 llamadas"
