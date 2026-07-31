@@ -215,7 +215,7 @@ Unlike PR2 (which got an explicit, pre-confirmed `pr2-size-exception`), **this a
 
 No other issues found. Tests/typecheck/lint all pass; no empirical task beyond the already-known-blocked set (1.6, 2.5, 3.9, 3.10) is affected.
 
-### Remaining Tasks
+### Remaining Tasks (as of Phase 3 apply batch)
 
 - [ ] 1.6 (blocked — see above)
 - [ ] 2.5 (blocked — see above)
@@ -230,6 +230,36 @@ No other issues found. Tests/typecheck/lint all pass; no empirical task beyond t
 - Boundary: starts from `update-flow-safeguards-pr2`'s tip, ends with the full two-call protocol wired end-to-end (implementation-complete; empirical validation against a real org still pending)
 - Estimated review budget impact: measured `git diff --stat update-flow-safeguards-pr2 HEAD -- src openspec .gitignore skills` = **667 lines total** (7 files changed, 667 insertions(+), 49 deletions(-)) — see Issues Found above for the exception request
 
-### Status
+### Status (Phase 3 implementation batch)
 
 All implementable Phase 3 tasks complete (3.1-3.8, 8/10). 3.9/3.10 blocked pending real-org/plugin-launch access, same as 1.6/2.5 from prior phases. **21/25 tasks complete across all 3 phases** (1.6, 2.5, 3.9, 3.10 blocked). Tests 55/55, typecheck clean, lint clean. `pr3-size-exception` requires user confirmation before this branch is opened as a PR. Ready for sdd-verify on the implementation; empirical tasks and the size-exception decision remain open follow-ups for a session with real org access / user input.
+
+## Batch: Empirical Verification Against Real Org (closes 1.6, 2.5, 3.9, 3.10)
+
+User confirmed `pr2-size-exception` and `pr3-size-exception` (both accepted), then explicitly authorized running the 4 previously-blocked empirical tasks against their real Genesys Cloud org ("Calidda"), naming the disposable test flow to use: `ZZZ-SDD-Test-DoNotUse-UpdateFlow` (inboundcall, flowId `69cd3550-0848-4fd7-a5c7-4be615b20ced`) — same flow reused across `update-flow`/`read-flow`'s original empirical verification.
+
+Ran the compiled CLI directly (`node --env-file=.env bin/deploy-runner.js ...`) against a temp exports dir (`/tmp/uf-verify/exports`, outside the repo, no pollution of the real gitignored `exports/`), same pattern as the original `update-flow` change's empirical verification (bypassing the MCP tool layer, exercising `deploy-runner`'s real logic against the real API).
+
+### Findings
+
+- **1.6 — CONFIRMED**: two consecutive `--mode read` exports of the same unmodified flow were byte-for-byte identical. No volatile/regenerated field exists in this flow's export. `KNOWN_VOLATILE_FLOW_PATHS` correctly ships empty.
+- **2.5 — CONFIRMED (fallback path, not the hopeful "stable name/id" path)**: the flow's `variables` array elements are shaped `{ stringVariable: { name, ... } }` — `name` is nested inside a type-discriminator wrapper, not a top-level array-element property. `arrayElementKey` therefore keys by index for this array (confirmed directly in the real `requestedDiff` output: `inboundCall.variables[2].stringVariable.name`), which is the documented safe degradation, not a bug. `states`/`tasks` array shapes remain unconfirmed (this disposable flow has none).
+- **3.9 — CONFIRMED end-to-end, both branches of the gate**:
+  - Clean path: call 1 → call 2 with no drift → gate passed (`confirmDiff === requestedDiff`) → `publishAsync` attempted (blocked only by this specific flow's own accumulated Architect validation errors — unused variables from years of reuse — an environment issue, not ours) → baseline correctly preserved on failure, `unlocked:true`.
+  - Blocked path: tampered the persisted baseline's `requestedContent` (reverted to `originalContent`, simulating an untracked live change) → call 2 → `errorKind:"unsolicited-changes-detected"`, exact `unrequestedPaths` returned, baseline preserved, `unlocked:true`. Confirms hard-block-no-override end-to-end against the real API.
+  - **Real bug found and fixed**: the CLI's `--flow-file` requirement guard didn't exempt `--mode update --confirm-publish`, which never uses a flow file. Direct CLI invocation of call 2 without `--flow-file` failed with a misleading error. Fixed in `src/deploy-runner/index.ts` (`isConfirmPublishCall` exemption, mirroring the existing `mode !== "read"` exemption). The MCP tool's own production path was unaffected (its schema keeps `flowFile` required and always passes it), so this was a CLI-only gap. Re-verified `pnpm test` (55/55), typecheck, lint clean after the fix.
+- **3.10 — CONFIRMED via config inspection**: `.mcp.json` sets no `cwd` for the MCP server process, so it inherits Claude Code's own `process.cwd()` at spawn time (Node `child_process.spawn` default) — equal to the project root under the standard usage pattern. Documented as a usage-pattern caveat (not a code defect) if Claude Code is ever launched from outside the project root.
+
+### Files Changed (this batch)
+
+| File | Action | What Was Done |
+|------|--------|----------------|
+| `src/deploy-runner/index.ts` | Modified | Fixed the `--flow-file` requirement guard to also exempt `--mode update --confirm-publish` |
+| `bin/deploy-runner.js` | Modified | Rebuilt bundle (pre-commit hook / manual `pnpm run build:deploy-runner`) |
+| `openspec/changes/update-flow-safeguards/tasks.md` | Modified | Marked 1.6, 2.5, 3.9, 3.10 `[x]` with findings |
+| `openspec/changes/update-flow-safeguards/state.yaml` | Modified | `phases.apply.status = done` |
+| `openspec/changes/update-flow-safeguards/apply-progress.md` | Modified | This batch appended |
+
+### Status
+
+**25/25 tasks complete.** All 4 empirical unknowns resolved against the real org. One real bug found and fixed during empirical verification. Ready for `sdd-verify`.

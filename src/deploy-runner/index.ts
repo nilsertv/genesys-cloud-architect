@@ -859,8 +859,12 @@ async function main(): Promise<void> {
               : "create";
 
     // "read" mode never runs a user flow file — it only loads an existing
-    // flow and exports it — so --flow-file is not required in that mode.
-    if (mode !== "read" && !flowFile) {
+    // flow and exports it. Call 2 of "update" mode (--confirm-publish) never
+    // runs one either — confirmAndPublishFlow() only re-checks-out, diffs,
+    // and publishes, it never imports a flow file — so --flow-file is not
+    // required in either case.
+    const isConfirmPublishCall = mode === "update" && values["confirm-publish"];
+    if (mode !== "read" && !isConfirmPublishCall && !flowFile) {
         emit("result", {
             success: false,
             error: "Missing --flow-file argument",

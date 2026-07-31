@@ -124901,7 +124901,8 @@ async function main() {
     process.exit(1);
   }
   const mode = rawMode === "update" ? "update" : rawMode === "read" ? "read" : "create";
-  if (mode !== "read" && !flowFile) {
+  const isConfirmPublishCall = mode === "update" && values["confirm-publish"];
+  if (mode !== "read" && !isConfirmPublishCall && !flowFile) {
     emit("result", {
       success: false,
       error: "Missing --flow-file argument"

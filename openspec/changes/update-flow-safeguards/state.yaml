@@ -23,10 +23,31 @@ phases:
     status: done
     artifact: openspec/changes/update-flow-safeguards/tasks.md
   apply:
-    status: partial
+    status: done
     artifact: openspec/changes/update-flow-safeguards/apply-progress.md
     note: >
-      Phases 1-3 of 3 done (implementation). Phase 1 (PR1, work unit 1):
+      All 25/25 tasks complete, including the 4 empirical real-org tasks
+      (1.6, 2.5, 3.9, 3.10) — run against org "Calidda", flow
+      `ZZZ-SDD-Test-DoNotUse-UpdateFlow` (flowId
+      `69cd3550-0848-4fd7-a5c7-4be615b20ced`), same disposable flow reused
+      from `update-flow`/`read-flow`'s original verification. Findings:
+      repeated exports of an unmodified flow are byte-identical (1.6);
+      `variables` array elements are wrapper-shaped
+      (`{stringVariable:{name,...}}`), so `diffFlowYaml` correctly falls
+      back to index-based keying, confirmed directly in a real
+      `requestedDiff` (2.5); the full two-call protocol was confirmed
+      end-to-end against the real API for BOTH the clean-publish-attempt
+      path and the hard-block path (simulated drift via a tampered
+      persisted baseline file), with correct `errorKind`,
+      `unrequestedPaths`, baseline preservation, and unlock behavior in
+      both cases (3.9); `.mcp.json` sets no `cwd` override, so the MCP
+      server inherits Claude Code's own `process.cwd()` at spawn time,
+      confirmed via config inspection (3.10). One real bug found and fixed
+      during this empirical pass: the CLI's `--flow-file` guard didn't
+      exempt `--mode update --confirm-publish` (which never uses a flow
+      file) — fixed in `index.ts`; the MCP tool's production path was
+      unaffected. Re-verified `pnpm test` (55/55), typecheck, lint clean
+      after the fix. Phase 1 (PR1, work unit 1):
       baseline envelope write/read/delete + flowId path-traversal
       sanitization + `yaml` dependency, all TDD RED->GREEN, tests/typecheck/
       lint pass. Branch `update-flow-safeguards-pr1` off `main`, no PR
