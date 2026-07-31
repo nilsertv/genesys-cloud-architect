@@ -26,14 +26,22 @@ phases:
     status: partial
     artifact: openspec/changes/update-flow-safeguards/apply-progress.md
     note: >
-      Phase 1 of 3 done. Phase 1 (PR1, work unit 1): baseline envelope
-      write/read/delete + flowId path-traversal sanitization + `yaml`
-      dependency, all TDD RED->GREEN, tests/typecheck/lint pass. Branch
-      `update-flow-safeguards-pr1` off `main`, no PR opened yet (not
+      Phases 1 and 2 of 3 done. Phase 1 (PR1, work unit 1): baseline
+      envelope write/read/delete + flowId path-traversal sanitization +
+      `yaml` dependency, all TDD RED->GREEN, tests/typecheck/lint pass.
+      Branch `update-flow-safeguards-pr1` off `main`, no PR opened yet (not
       requested). Task 1.6 (empirical real-org export byte-stability check)
       is blocked — no live Genesys Cloud org access in this sandboxed apply
-      session; deferred to a session with real credentials. Phase 2 (PR2)
-      and Phase 3 (PR3) not started.
+      session; deferred to a session with real credentials. Phase 2 (PR2,
+      work unit 2): `diffFlowYaml` structural diff engine + `evaluateFlowDiffGate`
+      + exported `KNOWN_VOLATILE_FLOW_PATHS` (ships empty per design.md
+      fallback), all TDD RED->GREEN, tests/typecheck/lint pass. Branch
+      `update-flow-safeguards-pr2` off `update-flow-safeguards-pr1`
+      (stacked-to-main), no PR opened yet. Task 2.5 (empirical real-org
+      confirmation of stable name/id array keys) is blocked for the same
+      reason as 1.6 — does not block Phase 3 since the index-based fallback
+      degrades safely (more conservative, never less). Phase 3 (wiring/docs,
+      PR3) not started.
 
 open_decisions:
   - id: same-name-vs-fork

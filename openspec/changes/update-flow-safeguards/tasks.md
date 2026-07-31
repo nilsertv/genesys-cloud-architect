@@ -35,10 +35,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Structural Diff + Gate (PR 2, base = PR1 branch)
 
-- [ ] 2.1 RED — `diffFlowYaml` tests: added/removed/changed leaves, nested structures, array reorder tolerated via `name`/`id` keys, array reorder falls back to index without keys.
-- [ ] 2.2 GREEN — `update-helpers.ts`: `diffFlowYaml(baselineYaml, candidateYaml): FlowDiffResult`.
-- [ ] 2.3 RED — `evaluateFlowDiffGate` tests: clean diff allows, blocked on untouched-path delta, allowed on requested-path same value, blocked on requested-path different value, volatile path always allowed.
-- [ ] 2.4 GREEN — `update-helpers.ts`: `evaluateFlowDiffGate(requestedDiff, confirmDiff, volatilePaths?)` + exported `KNOWN_VOLATILE_FLOW_PATHS` (seed from 1.6 findings, else empty). Satisfies spec: Full-Baseline Diff Gate at Confirm Time.
+- [x] 2.1 RED — `diffFlowYaml` tests: added/removed/changed leaves, nested structures, array reorder tolerated via `name`/`id` keys, array reorder falls back to index without keys.
+- [x] 2.2 GREEN — `update-helpers.ts`: `diffFlowYaml(baselineYaml, candidateYaml): FlowDiffResult`.
+- [x] 2.3 RED — `evaluateFlowDiffGate` tests: clean diff allows, blocked on untouched-path delta, allowed on requested-path same value, blocked on requested-path different value, volatile path always allowed.
+- [x] 2.4 GREEN — `update-helpers.ts`: `evaluateFlowDiffGate(requestedDiff, confirmDiff, volatilePaths?)` + exported `KNOWN_VOLATILE_FLOW_PATHS` (seed from 1.6 findings, else empty). Satisfies spec: Full-Baseline Diff Gate at Confirm Time.
 - [ ] 2.5 **Empirical (real org)** — confirm Architect flow YAML arrays carry stable `name`/`id` keys; adjust `diffFlowYaml` keying if not confirmed. **BLOCKED**: same reason as 1.6 — no live Genesys Cloud org credentials/MCP tool access in this sandboxed apply session. `diffFlowYaml`'s `name`/`id`-then-index fallback (see design.md's "Diff format" decision) does not depend on this confirmation to function — it degrades safely to index-based comparison (strictly MORE conservative, not less) if arrays turn out not to carry stable keys, so this does not block Phase 3.
 
 ## Phase 3: Wiring — Two-Call Protocol (PR 3, base = PR2 branch)
