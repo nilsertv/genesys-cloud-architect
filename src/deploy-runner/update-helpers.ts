@@ -248,3 +248,201 @@ export async function deleteBaselineFile(filePath: string): Promise<void> {
         throw error;
     }
 }
+
+/** A single leaf-level delta produced by `diffFlowYaml`. */
+export interface FlowDiffEntry {
+    path: string;
+    oldValue?: unknown;
+    newValue?: unknown;
+}
+
+/**
+ * Structural diff between two parsed-YAML documents, expressed as
+ * leaf-path deltas. `changed` entries carry both `oldValue` and `newValue`;
+ * `added` entries carry only `newValue`; `removed` entries carry only
+ * `oldValue`.
+ */
+export interface FlowDiffResult {
+    changed: FlowDiffEntry[];
+    added: FlowDiffEntry[];
+    removed: FlowDiffEntry[];
+}
+
+type LeafValue = unknown;
+
+/**
+ * Flattens a parsed-YAML value into a `path -> leaf value` map.
+ *
+ * Objects flatten via `.key` path segments. Arrays flatten via `[key]`
+ * segments: when an array element is itself an object carrying a `name` or
+ * `id` property, that value keys the segment (so reordering array elements
+ * that carry a stable identity does not register as a diff) — otherwise the
+ * element's numeric index keys the segment, so reordering an array of plain
+ * values (or objects without `name`/`id`) DOES register as a diff, since
+ * there is no other stable identity to compare by.
+ */
+function flattenFlowYaml(
+    value: unknown,
+    path: string,
+    out: Map<string, LeafValue>,
+): void {
+    if (value === null || typeof value !== "object") {
+        out.set(path, value);
+        return;
+    }
+
+    if (Array.isArray(value)) {
+        if (value.length === 0) {
+            out.set(path, value);
+            return;
+        }
+        value.forEach((item, index) => {
+            const key = arrayElementKey(item, index);
+            flattenFlowYaml(item, `${path}[${key}]`, out);
+        });
+        return;
+    }
+
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    if (keys.length === 0) {
+        out.set(path, obj);
+        return;
+    }
+    for (const key of keys) {
+        flattenFlowYaml(obj[key], path ? `${path}.${key}` : key, out);
+    }
+}
+
+function arrayElementKey(item: unknown, index: number): string {
+    if (item !== null && typeof item === "object" && !Array.isArray(item)) {
+        const record = item as Record<string, unknown>;
+        if (typeof record.name === "string") {
+            return `name=${record.name}`;
+        }
+        if (typeof record.id === "string") {
+            return `id=${record.id}`;
+        }
+    }
+    return String(index);
+}
+
+function leafValuesEqual(a: LeafValue, b: LeafValue): boolean {
+    return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Computes a structural diff between `baselineYaml` and `candidateYaml`,
+ * both parsed as YAML first (never compared as raw text — key reordering
+ * inside an object never registers as a diff, since object flattening is
+ * key-driven, not order-driven). See `flattenFlowYaml` for how array
+ * elements are keyed.
+ */
+export function diffFlowYaml(
+    baselineYaml: string,
+    candidateYaml: string,
+): FlowDiffResult {
+    const baseline = new Map<string, LeafValue>();
+    const candidate = new Map<string, LeafValue>();
+    flattenFlowYaml(parseYaml(baselineYaml), "", baseline);
+    flattenFlowYaml(parseYaml(candidateYaml), "", candidate);
+
+    const changed: FlowDiffEntry[] = [];
+    const added: FlowDiffEntry[] = [];
+    const removed: FlowDiffEntry[] = [];
+
+    for (const [path, oldValue] of baseline) {
+        if (!candidate.has(path)) {
+            removed.push({ path, oldValue });
+            continue;
+        }
+        const newValue = candidate.get(path);
+        if (!leafValuesEqual(oldValue, newValue)) {
+            changed.push({ path, oldValue, newValue });
+        }
+    }
+    for (const [path, newValue] of candidate) {
+        if (!baseline.has(path)) {
+            added.push({ path, newValue });
+        }
+    }
+
+    return { changed, added, removed };
+}
+
+/**
+ * Volatile leaf paths that Genesys Cloud is confirmed to regenerate on every
+ * export, independent of any requested edit — always allowed through
+ * `evaluateFlowDiffGate` even when absent from `requestedDiff`.
+ *
+ * Ships empty: no volatile field names have been empirically confirmed yet
+ * (see design.md's "Volatile-field allowlist" decision and tasks.md's
+ * empirical task 2.5/1.6). Extending this array is a one-line addition, not
+ * an algorithm change.
+ */
+export const KNOWN_VOLATILE_FLOW_PATHS: readonly string[] = [];
+
+/** A single leaf path's resolved delta, used internally to compare diffs. */
+interface ResolvedDelta {
+    kind: "added" | "removed" | "changed";
+    value: unknown;
+}
+
+function resolveDeltas(diff: FlowDiffResult): Map<string, ResolvedDelta> {
+    const resolved = new Map<string, ResolvedDelta>();
+    for (const entry of diff.added) {
+        resolved.set(entry.path, { kind: "added", value: entry.newValue });
+    }
+    for (const entry of diff.removed) {
+        resolved.set(entry.path, { kind: "removed", value: undefined });
+    }
+    for (const entry of diff.changed) {
+        resolved.set(entry.path, { kind: "changed", value: entry.newValue });
+    }
+    return resolved;
+}
+
+/**
+ * Gates a publish decision at confirm time (call 2). `requestedDiff` is
+ * `diff(baseline, postEditSnapshot)` computed by call 1 — the edit script's
+ * own effect, taken as the sole source of truth for "what was requested"
+ * (see design.md's "Resolved: expressing requested" section). `confirmDiff`
+ * is `diff(baseline, liveAtConfirm)` computed by call 2.
+ *
+ * Every leaf path touched in `confirmDiff` MUST either:
+ *  - appear in `volatilePaths` (default `KNOWN_VOLATILE_FLOW_PATHS`, which
+ *    ships empty), OR
+ *  - appear in `requestedDiff` resolving to the exact same value the edit
+ *    produced.
+ *
+ * Any other confirm-time path — untouched by the edit, or touched by the
+ * edit but now resolving to a DIFFERENT value (e.g. a same-path re-edit by
+ * anyone between calls) — blocks publish unconditionally. There is no
+ * override (`diff-gate-posture: hard-block-no-override`, confirmed in
+ * state.yaml).
+ */
+export function evaluateFlowDiffGate(
+    requestedDiff: FlowDiffResult,
+    confirmDiff: FlowDiffResult,
+    volatilePaths: readonly string[] = KNOWN_VOLATILE_FLOW_PATHS,
+): { blocked: boolean; unrequestedPaths: string[] } {
+    const requested = resolveDeltas(requestedDiff);
+    const confirmed = resolveDeltas(confirmDiff);
+    const unrequestedPaths: string[] = [];
+
+    for (const [path, confirmDelta] of confirmed) {
+        if (volatilePaths.includes(path)) {
+            continue;
+        }
+        const requestedDelta = requested.get(path);
+        if (
+            !requestedDelta ||
+            requestedDelta.kind !== confirmDelta.kind ||
+            !leafValuesEqual(requestedDelta.value, confirmDelta.value)
+        ) {
+            unrequestedPaths.push(path);
+        }
+    }
+
+    return { blocked: unrequestedPaths.length > 0, unrequestedPaths };
+}
