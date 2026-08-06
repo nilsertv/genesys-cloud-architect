@@ -4,7 +4,10 @@
       "command": "node",
       "args": ["${CLAUDE_PLUGIN_ROOT}/servers/genesys-cloud-architect-mcp.js"],
       "env": {
-        "DEPLOY_SCRIPT_PATH": "${CLAUDE_PLUGIN_ROOT}/bin/deploy-runner.js"
+        "DEPLOY_SCRIPT_PATH": "${CLAUDE_PLUGIN_ROOT}/bin/deploy-runner.js",
+        "GENESYS_REGION": "${GENESYS_REGION:-}",
+        "GENESYS_CLIENT_ID": "${GENESYS_CLIENT_ID:-}",
+        "GENESYS_CLIENT_SECRET": "${GENESYS_CLIENT_SECRET:-}"
       }
     }
   }

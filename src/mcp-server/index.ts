@@ -1,5 +1,7 @@
+import path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { config as loadDotenv } from "dotenv";
 import platformClient from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
 import { deployFlow } from "./tools/deploy-flow.ts";
@@ -7,6 +9,14 @@ import { flowDependencies } from "./tools/flow-dependencies.ts";
 import { readFlow } from "./tools/read-flow.ts";
 import { testBotFlow } from "./tools/test-bot-flow.ts";
 import { updateFlow } from "./tools/update-flow.ts";
+
+// Fallback for launch contexts where .mcp.json's ${VAR} expansion had nothing
+// to expand (e.g. direnv wasn't loaded in the shell that started Claude Code).
+// CLAUDE_PROJECT_DIR is the documented, stable project root — not `cwd`,
+// which Claude Code does not guarantee for spawned MCP servers.
+if (!process.env.GENESYS_CLIENT_ID && process.env.CLAUDE_PROJECT_DIR) {
+    loadDotenv({ path: path.join(process.env.CLAUDE_PROJECT_DIR, ".env") });
+}
 
 const envResults = z
     .object({
