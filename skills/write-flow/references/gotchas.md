@@ -159,3 +159,124 @@ The SDK auto-resolves the Home division during session startup and sets it on `f
 **`flowVersion: "published"` against a flow that was never published fails loudly — empirically confirmed end-to-end through the real `read_flow` MCP tool**, not just the underlying deploy-runner: the SDK returns an explicit HTTP 404, `"Flow '<name>' version 'published' is missing. (not.found)"`, rather than silently falling back to the latest or debug version. Don't assume `flowVersion: "published"` always returns something — check for this error whenever the flow in question might not have a published version yet.
 
 That error message is currently classified as `errorKind: "unknown"`, NOT `"not-found"`, even though the raw text ends in `(not.found)`. `read_flow` reuses `update_flow`'s `classifyUpdateError()` unchanged, and its regex (`not[\s-]?found`) does not match the literal `(not.found)` (a dot, not a space or hyphen) that this specific SDK error uses. This is a known, documented classification gap — not something to silently work around in your own code — so callers should not rely on `errorKind` alone to detect this case; check the raw error text for `"version '...' is missing"` if you need to distinguish it from a generic not-found.
+
+## Relative imports need explicit `.ts` extensions at runtime
+
+`tsc` with `--allowImportingTsExtensions` happily typechecks a relative import written without an extension (`import { X } from "./constants"`), but `deploy_flow`/`update_flow` execute the file under Node's native ESM loader, which requires the extension explicitly. The typecheck step passes; the deploy fails.
+
+**Symptom:** `Deploy failed: Cannot find module '/path/to/flows/constants' imported from '/path/to/flows/inbound-banmedica.ts'`
+
+**Fix:** always import local flow modules with the `.ts` suffix — applies to every relative import between flow files (`helpers.ts`, `constants.ts`, etc.), not just the entry file the deploy tool loads directly:
+- Correct: `import { QUEUE_IDS, TEXTS } from "./constants.ts";`
+- Wrong: `import { QUEUE_IDS, TEXTS } from "./constants";`
+
+## `addMenuTransferToAcd`'s action is not a valid container for follow-up actions
+
+`archFactoryMenus.addMenuTransferToAcd(menu, name, digit)` bundles a `TransferToAcd` action directly into the menu choice. Its `.actionTransferToAcd.outputFailure` looks like any other `ArchActionOutput`, but the SDK rejects adding actions to it — the action is considered "part of a menu choice," not a free-standing action.
+
+**Symptom:** `Deploy failed: - Parameter 'archBaseMultiActionContainer' in 'ArchFactoryActions.addActionDisconnect' is invalid. Reason: ERROR! unable to add an action to the action container because the action container is not valid. valid action containers are tasks or outputs on an action when the action is not part of a menu choice.`
+
+**Fix:** don't use `addMenuTransferToAcd`. Use `addMenuTask` to get a plain task as the menu choice, then add the transfer action to that task directly with `addActionTransferToAcd(task)` — its `outputFailure` is a normal, valid container:
+
+```typescript
+// Wrong
+const opcion1 = archFactoryMenus.addMenuTransferToAcd(mainMenu, "Emergencia", "1");
+await opcion1.actionTransferToAcd.setLiteralByQueueIdAsync(queueId);
+archFactoryActions.addActionDisconnect(opcion1.actionTransferToAcd.outputFailure, "Fin");
+
+// Correct
+const opcion1 = archFactoryMenus.addMenuTask(mainMenu, "Emergencia", "1");
+const transfer = archFactoryActions.addActionTransferToAcd(opcion1.actionTask.task);
+await transfer.setLiteralByQueueIdAsync(queueId);
+archFactoryActions.addActionDisconnect(transfer.outputFailure, "Fin");
+```
+
+This is likely a broader pattern: any `addMenu<ActionType>` convenience helper that bundles an action into the menu choice itself probably has the same restriction on that action's secondary outputs. When in doubt, prefer `addMenuTask` + adding the action explicitly.
+
+## Expression language has no `ToNumber` — use `ToDecimal`
+
+**Symptom:** `ERROR! expression text of 'ToNumber(Replace(Call.Ani, "+56", ""))' is in error. Reason: 'ToNumber' at position 1 is not a valid function or variable reference.`
+
+**Fix:** the function that converts a string expression to a numeric value is `ToDecimal(value)` (already listed in `expression-reference.md`'s function table), not `ToNumber(value)`. `tsc` doesn't catch expression-string typos — this is a runtime-only error.
+
+## A menu's `menuDefault` still needs its own DTMF/speech term
+
+Setting `mainMenu.menuDefault = someMenuTask` makes that task the fallback when no other choice matches, but Architect still validates that every `ArchMenuTask` child of a menu (default or not) has at least one recognition term (DTMF digit or speech grammar) of its own.
+
+**Symptom (validation ERROR, not a warning — `checkInAsync()` still succeeds and saves the flow with the error present; only `validateAsync()`'s report flags it):**
+`ERROR [[TrackingID:109, Name:'Opcion invalida', Type:'ArchMenuTask']]: Each menu choice must have DTMF or speech recognition terms for each supported language`
+
+**Fix:** give the default/fallback task an explicit, otherwise-unused digit (e.g. `"0"` when the real options use 1–3):
+
+```typescript
+// Wrong
+const opcionInvalida = archFactoryMenus.addMenuTask(mainMenu, "Opcion invalida");
+
+// Correct
+const opcionInvalida = archFactoryMenus.addMenuTask(mainMenu, "Opcion invalida", "0");
+```
+
+## In-Queue Call Flows (`inqueuecall`) do not support the Wait action
+
+`archFactoryActions.addActionWait` is valid in `inbound-call` and other flow types but is rejected outright in `inqueuecall` flows — the queue engine owns call-hold/wait state while a call is queued, so the flow can't insert its own wait.
+
+**Symptom:** `Deploy failed: - Parameter 'actionDefId' in 'ArchBaseFactory.validateActionDefId' is invalid. Reason: ERROR! invalid action definition because 'WaitAction' cannot be used in flows of type 'inqueuecall'.`
+
+**Fix:** replace the Wait with a `CollectInput` action whose `noEntryTimeoutMS` parameter provides the same delay. If a caller-entered digit isn't actually needed, wire both `outputSuccess` and `outputFailure` to the same follow-up actions so the timeout path (the one that fires in practice) and the accidental-digit path behave identically:
+
+```typescript
+// Wrong (rejected in inqueuecall)
+archFactoryActions.addActionWait(loopTask, "Espera 10s", "ToDuration(10000)");
+archFactoryActions.addActionPlayAudio(loopTask, "Audio", texts.audio);
+const transfer = archFactoryActions.addActionTransferToAcd(loopTask, "Transfer");
+
+// Correct
+const wait = archFactoryActions.addActionCollectInput(
+    loopTask, "Espera 10s", '""', undefined, /* interDigitTimeoutMS */ 5000,
+    /* noEntryTimeoutMS */ 10000,
+);
+wait.setInputDataVariable("Flow.someUnusedVar"); // see next gotcha — required
+wait.setDigitsExact(1);
+
+for (const branch of [wait.outputSuccess, wait.outputFailure]) {
+    archFactoryActions.addActionPlayAudio(branch, "Audio", texts.audio);
+    const transfer = archFactoryActions.addActionTransferToAcd(branch, "Transfer");
+    await transfer.setLiteralByQueueIdAsync(queueId);
+}
+```
+
+If the in-queue flow's intent is an actual caller-facing offer (e.g. "press 1 for a callback"), this is exactly the pattern already used for that purpose — no separate Wait is needed at all; the offer's own `noEntryTimeoutMS` acts as the wait period, and leaving the timeout (`outputFailure`) branch empty lets the surrounding `ArchTaskLoop` repeat automatically.
+
+## `CollectInput` requires `setInputDataVariable` even when the digit is never used
+
+**Symptom (validation ERROR, not caught by typecheck):** `ERROR [[TrackingID:11, Name:'Espera 10s', Type:'ArchActionCollectInput']]: No value set for Input Data Name - There is no variable specified`
+
+**Fix:** always call `.setInputDataVariable("Flow.someVariable")` on a `CollectInput` action, even if the flow logic ignores the captured value (e.g. when `CollectInput` is repurposed purely as a timed wait, per the previous gotcha). Declare a throwaway flow variable for this if there's no other natural one to reuse:
+
+```typescript
+flow.addVariable("waitDigit", flow.dataTypes.string);
+// ...
+wait.setInputDataVariable("Flow.waitDigit");
+```
+
+## A retry after a validation ERROR is implicitly re-creating an existing flow
+
+Reinforces "Re-creating Existing Flows" in `sdk-patterns.md`: `checkInAsync()` can succeed and persist a flow to Genesys Cloud even when `validateAsync()` reports an ERROR-level issue — validation errors don't block the save, they're advisory until publish. Practical consequence: if a `deploy_flow` run hits a validation ERROR, fixing the code and re-running `deploy_flow` is not deploying a "new" flow — it's implicitly re-creating one that already exists from the previous (broken) attempt, so `architect:flow:delete` is required even though nothing was ever really finished from the flow-author's perspective.
+
+**Symptom on retry without delete permission:**
+```
+[error] could not delete the existing flow named '...'
+[error] HTTP 409 POST /api/v2/flows — A flow of type inboundcall called '...' already exists.
+```
+
+## Required OAuth Client permissions for `deploy_flow`
+
+The OAuth Client the plugin authenticates with needs, at minimum:
+
+| Permission | Needed for |
+|---|---|
+| `oauth:client:view` | Session startup / authentication itself |
+| `integrations:action:view` or `bridge:actions:view` | Looking up Data Actions by name (`setDataActionByNameAsync`) |
+| `architect:flow:delete` | Re-running `deploy_flow` against a flow name that already exists (see previous gotcha — this includes flows from a prior failed-but-checked-in attempt) |
+
+If a deploy fails with an HTTP 403 naming one of these permission sets, that's the fix — no code change needed, just grant the permission to the OAuth Client and retry the same deploy.
