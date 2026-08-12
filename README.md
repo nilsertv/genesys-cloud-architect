@@ -24,11 +24,21 @@ shared across every project on the machine.
 
 Drop a `.env` file in the root of the project you're using the plugin in:
 
+`GENESYS_REGION` is the bare API domain — no `https://`, no `api.` prefix:
+
 ```
-GENESYS_REGION=https://api.mypurecloud.com
+GENESYS_REGION=mypurecloud.com
 GENESYS_CLIENT_ID=your-oauth-client-id
 GENESYS_CLIENT_SECRET=your-oauth-client-secret
 ```
+
+Common regions:
+
+| Region | `GENESYS_REGION` |
+|---|---|
+| US East (N. Virginia) | `mypurecloud.com` |
+| US West (Oregon) | `usw2.pure.cloud` |
+| South America (São Paulo) | `sae1.pure.cloud` |
 
 The MCP server reads this file automatically at startup from `CLAUDE_PROJECT_DIR/.env` (the
 project root Claude Code itself resolves) — no shell setup required, and it works no matter how
@@ -41,6 +51,27 @@ If you already manage per-project env vars via [direnv](https://direnv.net/) (a 
 `.envrc` with `dotenv`) or a similar per-directory shell mechanism, that also works: `.mcp.json`
 forwards `GENESYS_REGION`, `GENESYS_CLIENT_ID`, and `GENESYS_CLIENT_SECRET` from Claude Code's own
 launch-time environment into the MCP server's environment.
+
+Install direnv, then hook it into your shell (add to `~/.bashrc` or `~/.zshrc`):
+
+```
+eval "$(direnv hook bash)"   # or `zsh` if you use zsh
+```
+
+In the project root, create `.envrc` reusing the same `.env` file from Option A:
+
+```
+dotenv
+```
+
+Then approve it once per project:
+
+```
+direnv allow
+```
+
+`direnv` exports the vars into your shell automatically on `cd` into the project — launch `claude`
+from that same shell afterward.
 
 **This only works if the variables are exported *before* `claude` starts.** `cd`-ing into the
 project and letting direnv export mid-session, in a different terminal than the one that launched
