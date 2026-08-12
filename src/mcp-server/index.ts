@@ -15,7 +15,13 @@ import { updateFlow } from "./tools/update-flow.ts";
 // CLAUDE_PROJECT_DIR is the documented, stable project root — not `cwd`,
 // which Claude Code does not guarantee for spawned MCP servers.
 if (!process.env.GENESYS_CLIENT_ID && process.env.CLAUDE_PROJECT_DIR) {
-    loadDotenv({ path: path.join(process.env.CLAUDE_PROJECT_DIR, ".env") });
+    // override: true — .mcp.json's `${VAR:-}` expansion pre-populates these
+    // keys as empty strings when unset, and dotenv only fills in *missing*
+    // keys by default, so without this the fallback silently no-ops.
+    loadDotenv({
+        path: path.join(process.env.CLAUDE_PROJECT_DIR, ".env"),
+        override: true,
+    });
 }
 
 const envResults = z
