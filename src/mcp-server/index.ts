@@ -5,6 +5,7 @@ import { config as loadDotenv } from "dotenv";
 import platformClient from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
 import { deployFlow } from "./tools/deploy-flow.ts";
+import { findFlow } from "./tools/find-flow.ts";
 import { flowDependencies } from "./tools/flow-dependencies.ts";
 import { readFlow } from "./tools/read-flow.ts";
 import { testBotFlow } from "./tools/test-bot-flow.ts";
@@ -91,6 +92,11 @@ const readFlowTool = readFlow({
     deployScriptPath: envVars.DEPLOY_SCRIPT_PATH,
 });
 server.registerTool("read_flow", readFlowTool.config, readFlowTool.handler);
+
+const findFlowTool = findFlow({
+    architectApi: new platformClient.ArchitectApi(),
+});
+server.registerTool("find_flow", findFlowTool.config, findFlowTool.handler);
 
 const testBotFlowTool = testBotFlow({
     textbotsApi: new platformClient.TextbotsApi(),
