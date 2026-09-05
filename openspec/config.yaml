@@ -8,28 +8,32 @@ context: |
   Build: esbuild (CJS/node22). Lint/format: Biome 2.4.15 (src/** only).
   Validation: zod v4 (via zod/v3 compat imports). Types: tsc strict,
   noEmit, NOT wired into CI/pre-commit (config-only, unenforced today).
-  Testing: NO test runner installed, NO test script, zero automated
-  tests. CI = lint + build + MCP boot/smoke test only. Bundles
+  Testing: node:test via `pnpm test` (node --experimental-strip-types
+  --test), 3 passing test files today (src/deploy-runner/update-helpers.test.ts,
+  src/mcp-server/tools/read-flow.test.ts,
+  src/mcp-server/tools/update-flow.test.ts). CI = lint + build + MCP
+  boot/smoke test only (pnpm test is not yet wired into CI). Bundles
   (bin/deploy-runner.js, servers/*.js) are committed and rebuilt +
   re-staged by husky pre-commit on every commit.
 
 testing:
-  strict_tdd: false
-  test_command: ""
+  strict_tdd: true
+  test_command: "pnpm test"
   reason: >
-    No test runner is installed (no jest/vitest/node:test in
-    devDependencies) and package.json has no "test" script. CI only
-    runs lint + build + a smoke test that boots the MCP server and
-    checks tools/list responds — no tool logic (pagination in
-    flow-dependencies, NDJSON parsing in deploy-flow, session state in
-    test-bot-flow) is exercised automatically. To enable Strict TDD:
-    (1) install a test runner (vitest recommended: fast, native ESM/TS
-    support, works well with esbuild-bundled projects; node:test is a
-    zero-dependency alternative already available in the Node 22
-    runtime this project targets), (2) add a "test" script to
-    package.json, (3) add a unit-test layer for the 3 MCP tools with
-    the Genesys SDKs mocked, and (4) re-run sdd-init to flip
-    strict_tdd to true and record the resolved test_command.
+    node:test is installed and wired via a "test" script
+    (node --experimental-strip-types --test $(find src -name
+    '*.test.ts' | sort)) — no external test runner dependency needed.
+    3 passing test files exist today: update-helpers.test.ts,
+    read-flow.test.ts, update-flow.test.ts. CI still only runs lint +
+    build + a smoke test that boots the MCP server and checks
+    tools/list responds — `pnpm test` is not yet wired into CI, so
+    Strict TDD is enforced at the sdd-apply/sdd-verify level, not by
+    CI. New pure/testable logic (parsers, helpers) MUST follow RED
+    (failing node:test) before GREEN (implementation); thin MCP tool
+    handlers wiring the Genesys SDKs remain covered by empirical
+    verification against a real org per this project's existing
+    convention (see update-flow's and update-flow-safeguards' design
+    docs), not by mocking the SDK.
   coverage:
     available: false
     command: ""
@@ -61,11 +65,11 @@ rules:
     - If a task adds tests, prefer vitest or node:test per the testing.reason guidance above
   apply:
     - Follow existing code patterns (thin MCP tool handlers, SDK interop isolated to deploy-runner/index.ts)
-    tdd: false # Strict TDD unavailable until a test runner is installed — see testing.reason
-    test_command: ""
+    tdd: true # node:test is installed and wired via `pnpm test` — see testing.reason
+    test_command: "pnpm test"
     - Do not silently swallow errors the way flow-dependencies.ts currently does (collapses all errors to "not found") — surface real error types when touching that code
   verify:
-    test_command: ""
+    test_command: "pnpm test"
     build_command: "pnpm run build"
     coverage_threshold: 0
     - lint_command: "pnpm run lint"
