@@ -331,9 +331,48 @@ or intent-fanout type is left with `predecessors`/`successors` still empty
 and `terminal: false` (default), pending tasks 2.11–2.14. This is expected,
 not a bug: it matches tasks.md's phasing exactly.
 
+### PR2 chunk-A runtime harness blocker (native `sdd-attempt` ledger) — needs maintainer decision
+
+Tasks 2.5–2.10 were implemented and committed (`c7b43cb` +
+`0f235d8` — the second commit is a biome auto-format fixup the pre-commit
+hook applied after staging but before the first commit landed; both are on
+`feat/adopt-upstream-flow-ir`). `pnpm test`: 69/69 green.
+
+`sdd-attempt settle` returned `state: blocked, reason: maintainer_decision`
+because this attempt's `changed_lines` came back as **417**, 17 lines over
+this objective's `max_changed_lines: 400`. This is a genuine (small)
+overage, not a mis-declared-untracked-file mistake like the two prior
+blocks: the diff legitimately includes the 2 code/test file changes plus
+this session's `tasks.md`/`apply-progress.md` doc updates (the latter two
+were still uncommitted from the *previous* session's tasks 1.1–1.5/2.1–2.4
+work, so this commit's diff carries their accumulated doc edits too, not
+just this chunk's).
+
+Per `gentle-ai sdd-attempt status`, unblocking requires a maintainer to
+run:
+
+```
+gentle-ai sdd-attempt reset --cwd /home/ubuntu/00-dev-apps/genesys-cloud-architect \
+  --change flow-ir \
+  --expected-revision sha256:82c369b5ab838202daf875904fe598960f1a02c40663f7d709ad130cba0f32a9 \
+  --request-id "<unique-request-id>" \
+  --reason "PR2 chunk (tasks 2.5-2.10) settled at 417 changed lines, 17 over the 400 objective budget; genuine small overage (doc-file backlog from prior uncommitted tasks.md/apply-progress.md edits), work itself (task-jump/menu-choice/intent-fanout wiring) is done, committed as c7b43cb+0f235d8, 69/69 pnpm test green" \
+  --actor "<actor>"
+```
+
+This is explicitly a maintainer-authorized action this executor should not
+take unilaterally (no `--actor` authority).
+
+**Non-runtime artifact state is otherwise final for this session**:
+`tasks.md` 2.5–2.10 checked off, this file updated, code + tests + 3 new
+fixtures committed. No further PR2 code (tasks 2.11 onward) was attempted
+after this block, per this session's instruction to stop on a blocked
+settle rather than resetting unilaterally.
+
 ## Next
 
-1. Continue with PR2 tasks 2.11–2.21: generic outputs probe
+1. A maintainer runs the `gentle-ai sdd-attempt reset` command above.
+2. Continue with PR2 tasks 2.11–2.21: generic outputs probe
    (`DISABLED_BRANCH`/`DROPPED_EDGE`), `TERMINAL_ACTION_TYPES`/
    `TERMINAL_BRANCH_OUTCOMES` + `UNKNOWN_ACTION_TYPE` fallback,
    `initialSequence` resolution, the DFS order/reachable/backEdge pass, the
