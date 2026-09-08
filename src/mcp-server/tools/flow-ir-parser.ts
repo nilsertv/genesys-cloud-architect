@@ -72,7 +72,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function hasFlowSequenceItemList(
     configuration: unknown,
-): configuration is Record<string, unknown> & { flowSequenceItemList: unknown[] } {
+): configuration is Record<string, unknown> & {
+    flowSequenceItemList: unknown[];
+} {
     return (
         isRecord(configuration) &&
         Array.isArray(configuration.flowSequenceItemList)
@@ -241,9 +243,13 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
         ok: true,
         ir: {
             flowName:
-                typeof configuration.name === "string" ? configuration.name : "",
+                typeof configuration.name === "string"
+                    ? configuration.name
+                    : "",
             flowType:
-                typeof configuration.type === "string" ? configuration.type : "",
+                typeof configuration.type === "string"
+                    ? configuration.type
+                    : "",
             reachabilityIsComplete: true,
             tasks,
             nodes: [...nodesById.values()],
