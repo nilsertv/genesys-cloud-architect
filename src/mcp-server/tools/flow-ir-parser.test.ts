@@ -220,9 +220,7 @@ describe("parseFlow — intent-fanout exclusion (step 3c)", () => {
         assert.equal(result.ok, true);
         if (!result.ok) return;
         assert.ok(
-            result.warnings.some(
-                (w) => w.code === "UNRESOLVED_INTENT_FANOUT",
-            ),
+            result.warnings.some((w) => w.code === "UNRESOLVED_INTENT_FANOUT"),
         );
         assert.equal(result.ir.reachabilityIsComplete, false);
         const node = result.ir.nodes.find((n) => n.id === "listen-action");

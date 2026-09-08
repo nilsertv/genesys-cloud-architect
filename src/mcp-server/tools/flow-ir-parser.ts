@@ -357,7 +357,6 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
                 nodeId: actionId,
             });
             reachabilityIsComplete = false;
-            continue;
         }
 
         // 3d/3e (generic outputs probe, terminal/unknown-type fallback):
