@@ -144,3 +144,88 @@ describe("parseFlow — warnings/missing-duplicate-action-id fixture", () => {
         assert.equal(actionNodes[0].actionType, "DisconnectAction");
     });
 });
+
+describe("parseFlow — task-jump probe (step 3a)", () => {
+    it("wires a resolved task-jump directly to <taskId>::start, no branch-output node", () => {
+        const result = parseFlow({
+            name: "F",
+            type: "inboundcall",
+            flowSequenceItemList: [
+                {
+                    id: "task-1",
+                    name: "Task One",
+                    actionList: [
+                        {
+                            id: "jump-action",
+                            type: "CallTaskAction",
+                            name: "Jump",
+                            taskId: "task-2",
+                        },
+                    ],
+                },
+                { id: "task-2", name: "Task Two", actionList: [] },
+            ],
+        });
+        assert.equal(result.ok, true);
+        if (!result.ok) return;
+        const jumpNode = result.ir.nodes.find((n) => n.id === "jump-action");
+        assert.ok(jumpNode);
+        assert.deepEqual(
+            jumpNode?.successors.map((e) => e.id),
+            ["task-2::start"],
+        );
+        assert.ok(!result.ir.nodes.some((n) => n.kind === "branch-output"));
+    });
+
+    it("emits UNRESOLVED_REFERENCE for a task-jump targeting a nonexistent task", () => {
+        const result = parseFlow(
+            loadFixture("warnings/unresolved-reference.json"),
+        );
+        assert.equal(result.ok, true);
+        if (!result.ok) return;
+        assert.ok(
+            result.warnings.some((w) => w.code === "UNRESOLVED_REFERENCE"),
+        );
+        const jumpNode = result.ir.nodes.find((n) => n.id === "jump-action");
+        assert.deepEqual(jumpNode?.successors, []);
+    });
+});
+
+describe("parseFlow — menu-choice expansion (step 3b)", () => {
+    it("wires each menu choice as a branch-output child of startAction, successor = inline action", () => {
+        const result = parseFlow(loadFixture("menu-choice-task.json"));
+        assert.equal(result.ok, true);
+        if (!result.ok) return;
+        const menuNode = result.ir.nodes.find((n) => n.id === "menu-action");
+        assert.ok(menuNode);
+        assert.equal(menuNode?.successors.length, 1);
+        const branchId = menuNode?.successors[0]?.id;
+        assert.equal(branchId, "menu-action::0");
+        const branchNode = result.ir.nodes.find((n) => n.id === branchId);
+        assert.ok(branchNode);
+        assert.equal(branchNode?.kind, "branch-output");
+        assert.equal(branchNode?.label, "Sales");
+        assert.deepEqual(
+            branchNode?.successors.map((e) => e.id),
+            ["sales-action"],
+        );
+    });
+});
+
+describe("parseFlow — intent-fanout exclusion (step 3c)", () => {
+    it("emits UNRESOLVED_INTENT_FANOUT, sets reachabilityIsComplete false, skips wiring", () => {
+        const result = parseFlow(
+            loadFixture("warnings/unresolved-intent-fanout.json"),
+        );
+        assert.equal(result.ok, true);
+        if (!result.ok) return;
+        assert.ok(
+            result.warnings.some(
+                (w) => w.code === "UNRESOLVED_INTENT_FANOUT",
+            ),
+        );
+        assert.equal(result.ir.reachabilityIsComplete, false);
+        const node = result.ir.nodes.find((n) => n.id === "listen-action");
+        assert.deepEqual(node?.successors, []);
+    });
+});

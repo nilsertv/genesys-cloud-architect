@@ -70,6 +70,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Action types whose per-intent routing is not modelled in the IR (step 3c).
+ * Best-effort seed from `skills/write-flow/references/gotchas.md`'s
+ * `AskForIntent` (`AskForNLUIntentAction`) — no real fixture confirms this
+ * yet (see design.md's Open Questions). Extend one line at a time as more
+ * types are confirmed.
+ */
+export const INTENT_FANOUT_ACTION_TYPES: ReadonlySet<string> = new Set([
+    "AskForNLUIntentAction",
+]);
+
+/**
+ * Task-reference field on a task-jump action (step 3a). Unconfirmed real key
+ * — probed defensively per design.md.
+ */
+function probeTaskReference(raw: Record<string, unknown>): string | undefined {
+    const task = raw.task;
+    if (isRecord(task) && typeof task.id === "string") {
+        return task.id;
+    }
+    if (typeof raw.taskId === "string") {
+        return raw.taskId;
+    }
+    if (typeof raw.destinationTaskId === "string") {
+        return raw.destinationTaskId;
+    }
+    return undefined;
+}
+
+/**
+ * The action id a task item's `menuChoiceList` hangs off (step 3b).
+ * Unconfirmed real key — probed defensively per design.md.
+ */
+function probeStartActionId(item: Record<string, unknown>): string | undefined {
+    const startAction = item.startAction;
+    if (isRecord(startAction) && typeof startAction.id === "string") {
+        return startAction.id;
+    }
+    if (typeof startAction === "string") {
+        return startAction;
+    }
+    if (typeof item.startActionId === "string") {
+        return item.startActionId;
+    }
+    return undefined;
+}
+
 function hasFlowSequenceItemList(
     configuration: unknown,
 ): configuration is Record<string, unknown> & {
@@ -181,6 +228,7 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
     }));
 
     const nodesById = new Map<string, BuildNode>();
+    const rawByActionId = new Map<string, Record<string, unknown>>();
     for (const task of tasks) {
         const id = `${task.id}::start`;
         nodesById.set(id, {
@@ -214,6 +262,7 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
             continue;
         }
         const raw = occurrence.raw;
+        rawByActionId.set(occurrence.actionId, raw);
         nodesById.set(occurrence.actionId, {
             id: occurrence.actionId,
             kind: "action",
@@ -239,6 +288,140 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
         });
     }
 
+    let reachabilityIsComplete = true;
+    const taskIds = new Set(tasks.map((task) => task.id));
+
+    function addEdge(fromId: string, toId: string, label?: string): void {
+        const fromNode = nodesById.get(fromId);
+        const toNode = nodesById.get(toId);
+        if (!fromNode || !toNode) {
+            return;
+        }
+        fromNode.successors.push({ id: toId, label, backEdge: false });
+        toNode.predecessors.push({ id: fromId, label, backEdge: false });
+    }
+
+    // Task items whose menuChoiceList hangs off one startAction (step 3b) —
+    // these are wired exclusively via menu-choice expansion below, not the
+    // generic per-action wiring loop.
+    const startActionIds = new Set<string>();
+    for (const item of items) {
+        const menuChoiceList = Array.isArray(item.menuChoiceList)
+            ? item.menuChoiceList
+            : [];
+        if (menuChoiceList.length === 0) {
+            continue;
+        }
+        const startActionId = probeStartActionId(item);
+        if (startActionId !== undefined) {
+            startActionIds.add(startActionId);
+        }
+    }
+
+    // Wiring, per action, in design.md's documented order (steps 3a/3c —
+    // generic outputs probe and terminal/unknown-type fallback land in later
+    // tasks). Menu-choice actions (step 3b) are excluded here and wired
+    // exclusively in the pass below.
+    for (const [actionId, node] of nodesById) {
+        if (node.kind !== "action" || startActionIds.has(actionId)) {
+            continue;
+        }
+        const raw = rawByActionId.get(actionId);
+        if (!raw) {
+            continue;
+        }
+
+        // 3a. Task-jump probe.
+        const taskRef = probeTaskReference(raw);
+        if (taskRef !== undefined) {
+            if (taskIds.has(taskRef)) {
+                addEdge(actionId, `${taskRef}::start`);
+            } else {
+                warnings.push({
+                    code: "UNRESOLVED_REFERENCE",
+                    message: `Task jump from action "${actionId}" targets unknown task "${taskRef}".`,
+                    nodeId: actionId,
+                });
+            }
+            continue;
+        }
+
+        // 3c. Intent-fan-out exclusion.
+        if (
+            node.actionType !== undefined &&
+            INTENT_FANOUT_ACTION_TYPES.has(node.actionType)
+        ) {
+            warnings.push({
+                code: "UNRESOLVED_INTENT_FANOUT",
+                message: `Action "${actionId}" (${node.actionType}) has unmodelled per-intent routing.`,
+                nodeId: actionId,
+            });
+            reachabilityIsComplete = false;
+            continue;
+        }
+
+        // 3d/3e (generic outputs probe, terminal/unknown-type fallback):
+        // not yet implemented (design.md steps land in later tasks).
+    }
+
+    // 3b. Menu-choice expansion: one branch-output child of the task's
+    // startAction per choice, wired to the choice's already-indexed inline
+    // action.
+    for (const item of items) {
+        const menuChoiceList = Array.isArray(item.menuChoiceList)
+            ? item.menuChoiceList
+            : [];
+        if (menuChoiceList.length === 0) {
+            continue;
+        }
+        const startActionId = probeStartActionId(item);
+        const startNode =
+            startActionId !== undefined
+                ? nodesById.get(startActionId)
+                : undefined;
+        if (!startActionId || !startNode) {
+            continue;
+        }
+        menuChoiceList.forEach((choice, index) => {
+            if (!isRecord(choice) || !isRecord(choice.action)) {
+                return;
+            }
+            const targetActionId =
+                typeof choice.action.id === "string"
+                    ? choice.action.id
+                    : undefined;
+            if (
+                targetActionId === undefined ||
+                !nodesById.has(targetActionId)
+            ) {
+                return;
+            }
+            const choiceKey =
+                typeof choice.id === "string" ? choice.id : String(index);
+            const branchId = `${startActionId}::${choiceKey}`;
+            const label =
+                typeof choice.name === "string"
+                    ? choice.name
+                    : typeof choice.digit === "string"
+                      ? choice.digit
+                      : undefined;
+            nodesById.set(branchId, {
+                id: branchId,
+                kind: "branch-output",
+                label: label ?? branchId,
+                predecessors: [],
+                successors: [],
+                order: 0,
+                taskId: startNode.taskId,
+                taskName: startNode.taskName,
+                reachable: false,
+                terminal: false,
+            });
+            addEdge(startActionId, branchId, label);
+            addEdge(branchId, targetActionId);
+        });
+    }
+
     return {
         ok: true,
         ir: {
@@ -250,7 +433,7 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
                 typeof configuration.type === "string"
                     ? configuration.type
                     : "",
-            reachabilityIsComplete: true,
+            reachabilityIsComplete,
             tasks,
             nodes: [...nodesById.values()],
         },

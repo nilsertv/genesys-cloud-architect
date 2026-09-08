@@ -1,0 +1,17 @@
+{
+    "name": "UnresolvedIntentFanoutTest",
+    "type": "digitalbot",
+    "flowSequenceItemList": [
+        {
+            "id": "task-1",
+            "name": "Task One",
+            "actionList": [
+                {
+                    "id": "listen-action",
+                    "type": "AskForNLUIntentAction",
+                    "name": "Ask For Intent"
+                }
+            ]
+        }
+    ]
+}

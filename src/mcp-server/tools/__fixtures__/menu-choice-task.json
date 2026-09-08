@@ -1,0 +1,25 @@
+{
+    "name": "MenuChoiceTest",
+    "type": "inboundcall",
+    "flowSequenceItemList": [
+        {
+            "id": "task-1",
+            "name": "Task One",
+            "startAction": "menu-action",
+            "actionList": [
+                { "id": "menu-action", "type": "MenuAction", "name": "Main Menu" }
+            ],
+            "menuChoiceList": [
+                {
+                    "digit": "1",
+                    "name": "Sales",
+                    "action": {
+                        "id": "sales-action",
+                        "type": "TransferToUserAction",
+                        "name": "Transfer Sales"
+                    }
+                }
+            ]
+        }
+    ]
+}
