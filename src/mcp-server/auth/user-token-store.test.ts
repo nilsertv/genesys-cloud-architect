@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -54,6 +54,11 @@ describe("readUserToken / writeUserToken / deleteUserToken", () => {
             await writeUserToken(filePath, token);
             const read = await readUserToken(filePath);
             assert.deepEqual(read, token);
+            assert.equal(
+                statSync(filePath).mode & 0o777,
+                0o600,
+                "token file must be restricted to owner read/write only",
+            );
 
             await deleteUserToken(filePath);
             assert.equal(await readUserToken(filePath), undefined);

@@ -38,15 +38,22 @@ export async function readUserToken(
 
 /**
  * Writes `token` to `filePath` as JSON, restricted to owner read/write
- * (mode 0o600) — `writeFile`'s own `mode` option only applies when the file
- * is newly created, so an explicit `chmod` guarantees the permission even
- * when overwriting an existing file.
+ * (mode 0o600). Passing `mode` to `writeFile` sets it atomically at
+ * creation time, closing the brief window a write-then-chmod would leave
+ * where a freshly created file carries the process umask's default
+ * permissions instead. `writeFile`'s `mode` is ignored when the file
+ * already exists, so the follow-up `chmod` still guarantees 0o600 when
+ * overwriting a token file that predates this fix or was created by
+ * something else.
  */
 export async function writeUserToken(
     filePath: string,
     token: UserToken,
 ): Promise<void> {
-    await writeFile(filePath, JSON.stringify(token, null, 2), "utf8");
+    await writeFile(filePath, JSON.stringify(token, null, 2), {
+        encoding: "utf8",
+        mode: 0o600,
+    });
     await chmod(filePath, 0o600);
 }
 
