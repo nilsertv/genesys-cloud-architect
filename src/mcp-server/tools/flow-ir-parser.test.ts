@@ -515,7 +515,7 @@ describe("parseFlow — DFS pass: order, backEdge, and reachability (tasks 2.17-
 describe("parseFlow — UNRESOLVED_CALL_TASK reserved and real-fixture trace (tasks 2.19-2.20)", () => {
     it("never emits UNRESOLVED_CALL_TASK warning across all fixtures (reserved scenario)", () => {
         const fixtureNames = [
-            "real-calidda-flow.json",
+            "synthetic-menu-decision-flow.json",
             "cyclic-flow.json",
             "menu-choice-task.json",
             "warnings/disabled-branch.json",
@@ -538,18 +538,115 @@ describe("parseFlow — UNRESOLVED_CALL_TASK reserved and real-fixture trace (ta
         }
     });
 
-    it("parses real-calidda-flow.json conforming to well-formed empty contract", () => {
-        const res = parseFlow(loadFixture("real-calidda-flow.json"));
+    it("parses synthetic-menu-decision-flow.json — a real deployed flow with menu/decision/task-jump content", () => {
+        // Real flowId aa8baadc-7f2b-4103-b25b-c7d1643cb494, flow name
+        // ZZZ-SDD-Test-DoNotUse-FlowIRFixture, fetched via
+        // getFlowLatestconfiguration and saved verbatim. All ids below are
+        // the real GUIDs Architect assigned — not guessed.
+        const res = parseFlow(loadFixture("synthetic-menu-decision-flow.json"));
         assert.equal(res.ok, true);
-        if (res.ok) {
-            assert.equal(res.ir.flowName, "ZZZ-SDD-Test-DoNotUse-UpdateFlow");
-            assert.equal(res.ir.flowType, "inboundcall");
-            assert.equal(res.ir.reachabilityIsComplete, true);
-            assert.deepEqual(res.ir.tasks, []);
-            assert.deepEqual(res.ir.nodes, []);
-            assert.equal("entryTaskId" in res.ir, false);
-            assert.deepEqual(res.warnings, []);
-        }
+        if (!res.ok) return;
+
+        assert.equal(res.ir.flowName, "ZZZ-SDD-Test-DoNotUse-FlowIRFixture");
+        assert.equal(res.ir.flowType, "inboundcall");
+        assert.equal(res.ir.reachabilityIsComplete, true);
+        // Not assert.deepEqual(res.warnings, []) — node:assert/strict's
+        // deepEqual is deepStrictEqual<T>, an `asserts actual is T`
+        // assertion; T infers as never[] for an empty array literal and
+        // narrows res.warnings to never[] for the rest of this block.
+        assert.equal(res.warnings.length, 0);
+
+        // Entry resolves to the menu (initialSequence points at it).
+        const menuTaskId = "88f4e566-1805-4790-aefd-2750ccf8be9d";
+        assert.equal(res.ir.entryTaskId, menuTaskId);
+        const menuStart = res.ir.nodes.find(
+            (n) => n.id === `${menuTaskId}::start`,
+        );
+        assert.ok(menuStart);
+        assert.equal(menuStart?.reachable, true);
+
+        // The menu (a real Menu-typed flowSequenceItemList entry with NO
+        // startAction of its own) produces one branch-output per choice,
+        // anchored directly off its own task-start node.
+        assert.equal(menuStart?.successors.length, 2);
+        const branchNodes = (menuStart?.successors ?? []).map((e) =>
+            res.ir.nodes.find((n) => n.id === e.id),
+        );
+        assert.ok(branchNodes.every((n) => n?.kind === "branch-output"));
+        assert.deepEqual(branchNodes.map((n) => n?.label).sort(), [
+            "Continue",
+            "Decision",
+        ]);
+
+        // Choice 1's inline TaskAction wires to the "Continue" task via the
+        // real `taskReference` field, straight to <taskId>::start — no
+        // branch-output node for the task-jump itself.
+        const continueChoiceAction = res.ir.nodes.find(
+            (n) => n.id === "45de7e51-fc38-49b5-82e4-47a1ff93416b",
+        );
+        assert.ok(continueChoiceAction);
+        assert.deepEqual(
+            continueChoiceAction?.successors.map((e) => e.id),
+            ["75284cd7-08b1-44f6-adc4-350abc25451c::start"],
+        );
+
+        // The Continue task's real TransferTaskAction (JumpToTask) uses the
+        // same `taskReference` field to jump straight to the Second Task's
+        // start, which then reaches a terminal Disconnect.
+        const jumpAction = res.ir.nodes.find(
+            (n) => n.id === "e19464b9-a815-480c-9838-233c790725bb",
+        );
+        assert.equal(jumpAction?.actionType, "TransferTaskAction");
+        assert.deepEqual(
+            jumpAction?.successors.map((e) => e.id),
+            ["d0e8bc09-ce60-45e6-9a42-eb0c3c939242::start"],
+        );
+        const disconnectAfterJump = res.ir.nodes.find(
+            (n) => n.id === "675789d8-aecb-42e4-825b-cfad6f3b62b5",
+        );
+        assert.equal(disconnectAfterJump?.terminal, true);
+        assert.equal(disconnectAfterJump?.successors.length, 0);
+
+        // Choice 2's inline TaskAction wires to the "Decision" task, whose
+        // real DecisionAction has two `paths` outcomes (Yes/No) each
+        // resolving to a distinct branch-output node and then a distinct
+        // terminal Disconnect.
+        const decisionAction = res.ir.nodes.find(
+            (n) => n.id === "78f0b06e-0d2a-47ee-85ec-79dcacd8f084",
+        );
+        assert.equal(decisionAction?.actionType, "DecisionAction");
+        assert.equal(decisionAction?.successors.length, 2);
+
+        const yesBranch = res.ir.nodes.find(
+            (n) => n.id === "78f0b06e-0d2a-47ee-85ec-79dcacd8f084::__YES__",
+        );
+        const noBranch = res.ir.nodes.find(
+            (n) => n.id === "78f0b06e-0d2a-47ee-85ec-79dcacd8f084::__NO__",
+        );
+        assert.ok(yesBranch && noBranch);
+        assert.notEqual(yesBranch?.id, noBranch?.id);
+        assert.deepEqual(
+            yesBranch?.successors.map((e) => e.id),
+            ["5d856052-9aab-4924-97d7-b7faf8a9dd7f"],
+        );
+        assert.deepEqual(
+            noBranch?.successors.map((e) => e.id),
+            ["b5c818b7-3336-483d-9f7f-ff9ef6070301"],
+        );
+
+        const disconnectYes = res.ir.nodes.find(
+            (n) => n.id === "5d856052-9aab-4924-97d7-b7faf8a9dd7f",
+        );
+        const disconnectNo = res.ir.nodes.find(
+            (n) => n.id === "b5c818b7-3336-483d-9f7f-ff9ef6070301",
+        );
+        assert.equal(disconnectYes?.terminal, true);
+        assert.equal(disconnectNo?.terminal, true);
+
+        // Every leaf node reachable from the entry is either terminal or a
+        // task-start/branch-output with successors — no dangling reachable
+        // node with an unrecognized zero-output action.
+        assert.ok(!res.warnings.some((w) => w.code === "UNKNOWN_ACTION_TYPE"));
     });
 
     it("traces a full path from entry task-start to terminal node in a wired flow", () => {

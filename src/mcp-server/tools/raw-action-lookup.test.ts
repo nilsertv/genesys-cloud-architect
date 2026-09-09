@@ -222,9 +222,10 @@ describe("searchRawActions — content search, regex, case-sensitivity, truncati
         }, /flowSequenceItemList/);
     });
 
-    it("runs empirical verification against real-calidda-flow.json fixture (task 3.9)", () => {
-        const realFixture = loadFixture("real-calidda-flow.json");
+    it("runs empirical verification against synthetic-menu-decision-flow.json fixture (task 3.9)", () => {
+        const realFixture = loadFixture("synthetic-menu-decision-flow.json");
 
+        // Fake ids/terms still correctly report nothing found.
         const lookupRes = findRawActions(realFixture, [
             "any-guid-1",
             "any-guid-2",
@@ -238,5 +239,39 @@ describe("searchRawActions — content search, regex, case-sensitivity, truncati
         });
         assert.equal(searchRes.hasMatches, false);
         assert.deepEqual(searchRes.matches, []);
+
+        // A real action id (the Decision task's DecisionAction) resolves,
+        // including its menu-choice tagging for the inline TaskAction that
+        // targets it via `taskReference`.
+        const found = findRawActions(realFixture, [
+            "78f0b06e-0d2a-47ee-85ec-79dcacd8f084",
+        ]);
+        assert.equal(found.found.length, 1);
+        assert.equal(
+            (found.found[0].action as Record<string, unknown>).__type,
+            "DecisionAction",
+        );
+
+        // The menu choice's inline TaskAction carries menuChoice tagging
+        // with a numeric `digit` (1) converted to string.
+        const menuActionLookup = findRawActions(realFixture, [
+            "45de7e51-fc38-49b5-82e4-47a1ff93416b",
+        ]);
+        assert.deepEqual(menuActionLookup.found[0].menuChoice, {
+            digit: "1",
+            name: "Continue",
+        });
+
+        // A real name search finds the two Disconnect actions in the
+        // Decision task by their distinct labels.
+        const nameSearch = searchRawActions(realFixture, "Disconnect Yes", {
+            caseSensitive: false,
+            maxMatchesPerAction: 10,
+        });
+        assert.equal(nameSearch.hasMatches, true);
+        assert.equal(
+            nameSearch.matches[0].actionId,
+            "5d856052-9aab-4924-97d7-b7faf8a9dd7f",
+        );
     });
 });

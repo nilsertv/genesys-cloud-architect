@@ -1,9 +1,16 @@
 {
     "defaultLanguage": "en-US",
-    "description": "Disposable test flow created to empirically verify the update_flow MCP tool (SDD tasks 1.6/2.6). Safe to delete.",
-    "name": "ZZZ-SDD-Test-DoNotUse-UpdateFlow",
-    "nextTrackingNumber": 10,
+    "description": "Synthetic, org-independent flow used to regenerate the flow-ir parser fixture.",
+    "initialSequence": "88f4e566-1805-4790-aefd-2750ccf8be9d",
+    "name": "ZZZ-SDD-Test-DoNotUse-FlowIRFixture",
+    "nextTrackingNumber": 21,
     "uiMetaData": {
+        "task": [
+            {
+                "id": "d0e8bc09-ce60-45e6-9a42-eb0c3c939242",
+                "name": "Second Task"
+            }
+        ],
         "bridgeServerActions": [],
         "screenPops": []
     },
@@ -725,7 +732,358 @@
         "minimumServerVersion": "1.0",
         "ttsDataVersion": "1.0"
     },
-    "flowSequenceItemList": [],
+    "flowSequenceItemList": [
+        {
+            "startAction": "675789d8-aecb-42e4-825b-cfad6f3b62b5",
+            "trackingId": 10,
+            "id": "d0e8bc09-ce60-45e6-9a42-eb0c3c939242",
+            "name": "Second Task",
+            "__type": "Task",
+            "paths": [
+                {
+                    "label": "Default",
+                    "outputId": "__DEFAULT__"
+                }
+            ],
+            "actionList": [
+                {
+                    "trackingId": 11,
+                    "id": "675789d8-aecb-42e4-825b-cfad6f3b62b5",
+                    "name": "Disconnect After Jump",
+                    "uiMetaData": {
+                        "collapsed": false
+                    },
+                    "__type": "DisconnectAction"
+                }
+            ],
+            "variables": []
+        },
+        {
+            "startAction": "e19464b9-a815-480c-9838-233c790725bb",
+            "trackingId": 14,
+            "id": "75284cd7-08b1-44f6-adc4-350abc25451c",
+            "name": "Continue",
+            "__type": "Task",
+            "paths": [
+                {
+                    "label": "Default",
+                    "outputId": "__DEFAULT__"
+                }
+            ],
+            "actionList": [
+                {
+                    "taskReference": "d0e8bc09-ce60-45e6-9a42-eb0c3c939242",
+                    "taskName": "Second Task",
+                    "trackingId": 15,
+                    "id": "e19464b9-a815-480c-9838-233c790725bb",
+                    "name": "Jump To Second Task",
+                    "uiMetaData": {
+                        "collapsed": false
+                    },
+                    "__type": "TransferTaskAction",
+                    "inputs": []
+                }
+            ],
+            "variables": []
+        },
+        {
+            "startAction": "78f0b06e-0d2a-47ee-85ec-79dcacd8f084",
+            "trackingId": 17,
+            "id": "3b47a709-4ad6-4d20-91b9-d342a45668b9",
+            "name": "Decision",
+            "__type": "Task",
+            "paths": [
+                {
+                    "label": "Default",
+                    "outputId": "__DEFAULT__"
+                }
+            ],
+            "actionList": [
+                {
+                    "trackingId": 18,
+                    "id": "78f0b06e-0d2a-47ee-85ec-79dcacd8f084",
+                    "name": "Branch Decision",
+                    "uiMetaData": {
+                        "collapsed": false
+                    },
+                    "__type": "DecisionAction",
+                    "expression": {
+                        "config": {
+                            "lit": {
+                                "pos": 1,
+                                "text": "true",
+                                "type": "bln"
+                            }
+                        },
+                        "text": "true",
+                        "type": "bln",
+                        "uiMetaData": {
+                            "mode": 1
+                        },
+                        "metaData": {},
+                        "version": 2
+                    },
+                    "paths": [
+                        {
+                            "nextActionId": "5d856052-9aab-4924-97d7-b7faf8a9dd7f",
+                            "label": "Yes",
+                            "outputId": "__YES__"
+                        },
+                        {
+                            "nextActionId": "b5c818b7-3336-483d-9f7f-ff9ef6070301",
+                            "label": "No",
+                            "outputId": "__NO__"
+                        }
+                    ]
+                },
+                {
+                    "trackingId": 19,
+                    "id": "5d856052-9aab-4924-97d7-b7faf8a9dd7f",
+                    "name": "Disconnect Yes Branch",
+                    "uiMetaData": {
+                        "collapsed": false
+                    },
+                    "__type": "DisconnectAction"
+                },
+                {
+                    "trackingId": 20,
+                    "id": "b5c818b7-3336-483d-9f7f-ff9ef6070301",
+                    "name": "Disconnect No Branch",
+                    "uiMetaData": {
+                        "collapsed": false
+                    },
+                    "__type": "DisconnectAction"
+                }
+            ],
+            "variables": []
+        },
+        {
+            "trackingId": 12,
+            "id": "88f4e566-1805-4790-aefd-2750ccf8be9d",
+            "name": "Fixture Menu",
+            "uiMetaData": {
+                "collapsed": false
+            },
+            "__type": "Menu",
+            "extensionDialingDelay": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "dur"
+                    }
+                },
+                "text": "",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "menuChoiceList": [
+                {
+                    "speechRecTerms": {
+                        "en-US": []
+                    },
+                    "id": "d8369396-97d3-4df2-b583-7153a9cc8559",
+                    "name": "Continue",
+                    "action": {
+                        "taskReference": "75284cd7-08b1-44f6-adc4-350abc25451c",
+                        "trackingId": 13,
+                        "id": "45de7e51-fc38-49b5-82e4-47a1ff93416b",
+                        "name": "Continue",
+                        "uiMetaData": {
+                            "collapsed": false
+                        },
+                        "__type": "TaskAction"
+                    },
+                    "digit": 1
+                },
+                {
+                    "speechRecTerms": {
+                        "en-US": []
+                    },
+                    "id": "268da32b-c9f7-4e12-b95b-88975729bdca",
+                    "name": "Decision",
+                    "action": {
+                        "taskReference": "3b47a709-4ad6-4d20-91b9-d342a45668b9",
+                        "trackingId": 16,
+                        "id": "e5c5bfb6-08ec-4594-8e0f-b33ea724c9c4",
+                        "name": "Decision",
+                        "uiMetaData": {
+                            "collapsed": false
+                        },
+                        "__type": "TaskAction"
+                    },
+                    "digit": 2
+                }
+            ],
+            "promptRepeatCount": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "int"
+                    }
+                },
+                "text": "",
+                "type": "int",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "promptRepeatDelay": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "dur"
+                    }
+                },
+                "text": "",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "prompts": {
+                "bargeInExpression": {
+                    "config": {
+                        "lit": {
+                            "pos": 1,
+                            "text": "true",
+                            "type": "bln"
+                        }
+                    },
+                    "text": "true",
+                    "type": "bln",
+                    "uiMetaData": {
+                        "mode": 1
+                    },
+                    "metaData": {},
+                    "version": 2
+                },
+                "flushExpression": {
+                    "config": {
+                        "lit": {
+                            "pos": 1,
+                            "text": "false",
+                            "type": "bln"
+                        }
+                    },
+                    "text": "false",
+                    "type": "bln",
+                    "uiMetaData": {
+                        "mode": 1
+                    },
+                    "metaData": {},
+                    "version": 2,
+                    "outOfService": true
+                },
+                "defaultAudio": {
+                    "config": {
+                        "emp": {
+                            "pos": 1,
+                            "text": "",
+                            "type": "aud"
+                        }
+                    },
+                    "text": "",
+                    "type": "aud",
+                    "uiMetaData": {
+                        "sequenceItems": []
+                    },
+                    "metaData": {}
+                },
+                "cases": []
+            },
+            "speechRecMinConfidence": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "int"
+                    }
+                },
+                "text": "",
+                "type": "int",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "speechRecTimeoutComplete": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "dur"
+                    }
+                },
+                "text": "",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "speechRecTimeoutIncomplete": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "dur"
+                    }
+                },
+                "text": "",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "speechRecTimeoutTotal": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "dur"
+                    }
+                },
+                "text": "",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "useExtensionDialing": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "bln"
+                    }
+                },
+                "text": "",
+                "type": "bln",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            }
+        }
+    ],
     "supportedLanguageOptions": [
         {
             "language": "en-US",
@@ -759,91 +1117,7 @@
             }
         }
     ],
-    "variables": [
-        {
-            "description": "Marker variable added by empirical update_flow test at 1784213392470",
-            "id": "36239f97-bc00-4c37-90a4-64e3903ca4af",
-            "isCollection": false,
-            "isInternal": false,
-            "isOutput": false,
-            "isInput": false,
-            "isSecure": false,
-            "version": "1.0",
-            "__type": "StringVariable",
-            "name": "Flow.EmpiricalUpdateTestMarker",
-            "initialValue": {
-                "config": {
-                    "emp": {
-                        "pos": 1,
-                        "text": "",
-                        "type": "str"
-                    }
-                },
-                "text": "",
-                "type": "str",
-                "uiMetaData": {
-                    "mode": 3
-                },
-                "metaData": {},
-                "version": 2
-            }
-        },
-        {
-            "description": "Marker variable added by an empirical update_flow test run",
-            "id": "a4b84546-fbe1-4548-a999-d1c4b3510c6a",
-            "isCollection": false,
-            "isInternal": false,
-            "isOutput": false,
-            "isInput": false,
-            "isSecure": false,
-            "version": "1.0",
-            "__type": "StringVariable",
-            "name": "Flow.EmpiricalUpdateTestMarker_1784213525751",
-            "initialValue": {
-                "config": {
-                    "emp": {
-                        "pos": 1,
-                        "text": "",
-                        "type": "str"
-                    }
-                },
-                "text": "",
-                "type": "str",
-                "uiMetaData": {
-                    "mode": 3
-                },
-                "metaData": {},
-                "version": 2
-            }
-        },
-        {
-            "id": "8b69ac59-9f2f-470e-9a58-5361279dde5d",
-            "isCollection": false,
-            "isInternal": false,
-            "isOutput": false,
-            "isInput": false,
-            "isSecure": false,
-            "version": "1.0",
-            "__type": "StringVariable",
-            "name": "Flow.SafeguardsCleanPath_1785520180558",
-            "initialValue": {
-                "config": {
-                    "emp": {
-                        "pos": 1,
-                        "text": "",
-                        "type": "str"
-                    }
-                },
-                "text": "",
-                "type": "str",
-                "uiMetaData": {
-                    "mode": 3
-                },
-                "metaData": {},
-                "version": 2
-            }
-        }
-    ],
+    "variables": [],
     "versionMetaData": {
         "inputSchema": {
             "$schema": "http://json-schema.org/draft-07/schema#",

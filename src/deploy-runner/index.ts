@@ -712,9 +712,9 @@ export async function confirmAndPublishFlow(
 
 // ~50k tokens @ ~4 chars/token — a conservative starting value, NOT yet
 // validated against real flow exports (see design.md's Open Questions).
-// Empirical verification against the "Calidda" org (tasks.md 1.6) is what
-// this constant should be tuned against, if a real flow ever gets close to
-// or exceeds it.
+// Empirical verification against a real org (tasks.md 1.6) is what this
+// constant should be tuned against, if a real flow ever gets close to or
+// exceeds it.
 const MAX_YAML_CHARS = 200_000;
 
 /**

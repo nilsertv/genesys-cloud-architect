@@ -123,10 +123,16 @@ function probeTarget(raw: Record<string, unknown>): string | undefined {
 }
 
 /**
- * Task-reference field on a task-jump action (step 3a). Unconfirmed real key
- * — probed defensively per design.md.
+ * Task-reference field on a task-jump action (step 3a). `taskReference`
+ * (a bare GUID string) is the CONFIRMED real key — empirically verified
+ * against a real deployed flow's `TransferTaskAction`/`TaskAction` entries
+ * (see synthetic-menu-decision-flow.json). The other keys are kept as
+ * defensive fallbacks for shapes not yet observed.
  */
 function probeTaskReference(raw: Record<string, unknown>): string | undefined {
+    if (typeof raw.taskReference === "string") {
+        return raw.taskReference;
+    }
     const task = raw.task;
     if (isRecord(task) && typeof task.id === "string") {
         return task.id;
@@ -238,10 +244,14 @@ export function enumerateRawActions(
                 taskName,
                 raw,
                 menuChoice: {
+                    // CONFIRMED against a real deployed flow: `digit` is a
+                    // number (e.g. 1), not a string.
                     digit:
                         typeof choice.digit === "string"
                             ? choice.digit
-                            : undefined,
+                            : typeof choice.digit === "number"
+                              ? String(choice.digit)
+                              : undefined,
                     name:
                         typeof choice.name === "string"
                             ? choice.name
@@ -537,9 +547,15 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
         }
     }
 
-    // 3b. Menu-choice expansion: one branch-output child of the task's
-    // startAction per choice, wired to the choice's already-indexed inline
-    // action.
+    // 3b. Menu-choice expansion: one branch-output child of the anchor
+    // action per choice, wired to the choice's already-indexed inline
+    // action. The anchor is the item's own `startAction` when present, or
+    // the item's own task-start node otherwise — CONFIRMED against a real
+    // deployed flow that a real `Menu`-typed flowSequenceItemList entry
+    // carries `menuChoiceList` directly and has NO `startAction` field at
+    // all (unlike the synthetic fixture, which models menuChoiceList
+    // hanging off a task's inline MenuAction `startAction`). Both shapes
+    // are supported.
     for (const item of items) {
         const menuChoiceList = Array.isArray(item.menuChoiceList)
             ? item.menuChoiceList
@@ -547,12 +563,10 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
         if (menuChoiceList.length === 0) {
             continue;
         }
-        const startActionId = probeStartActionId(item);
-        const startNode =
-            startActionId !== undefined
-                ? nodesById.get(startActionId)
-                : undefined;
-        if (!startActionId || !startNode) {
+        const taskId = typeof item.id === "string" ? item.id : "";
+        const anchorId = probeStartActionId(item) ?? `${taskId}::start`;
+        const anchorNode = nodesById.get(anchorId);
+        if (!anchorNode) {
             continue;
         }
         menuChoiceList.forEach((choice, index) => {
@@ -571,20 +585,22 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
             }
             const choiceKey =
                 typeof choice.id === "string" ? choice.id : String(index);
-            const branchId = `${startActionId}::${choiceKey}`;
+            const branchId = `${anchorId}::${choiceKey}`;
             const label =
                 typeof choice.name === "string"
                     ? choice.name
                     : typeof choice.digit === "string"
                       ? choice.digit
-                      : undefined;
+                      : typeof choice.digit === "number"
+                        ? String(choice.digit)
+                        : undefined;
             addBranchOutput(
                 branchId,
                 label ?? branchId,
-                startNode.taskId,
-                startNode.taskName,
+                anchorNode.taskId,
+                anchorNode.taskName,
             );
-            addEdge(startActionId, branchId, label);
+            addEdge(anchorId, branchId, label);
             addEdge(branchId, targetActionId);
         });
     }
