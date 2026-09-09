@@ -78,7 +78,11 @@ const server = new McpServer({
 const architectApi = new platformClient.ArchitectApi();
 const routingApi = new platformClient.RoutingApi();
 
-const flowDependenciesTool = flowDependencies({ architectApi });
+const flowDependenciesTool = flowDependencies({
+    architectApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+});
 server.registerTool(
     "flow_dependencies",
     flowDependenciesTool.config,
@@ -120,14 +124,24 @@ const readFlowTool = readFlow({
 });
 server.registerTool("read_flow", readFlowTool.config, readFlowTool.handler);
 
-const findFlowTool = findFlow({ architectApi });
+const findFlowTool = findFlow({
+    architectApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+});
 server.registerTool("find_flow", findFlowTool.config, findFlowTool.handler);
 
-const findQueueTool = findQueue({ routingApi });
+const findQueueTool = findQueue({
+    routingApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+});
 server.registerTool("find_queue", findQueueTool.config, findQueueTool.handler);
 
 const testBotFlowTool = testBotFlow({
     textbotsApi: new platformClient.TextbotsApi(),
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
 });
 server.registerTool(
     "test_bot_flow",
@@ -135,17 +149,29 @@ server.registerTool(
     testBotFlowTool.handler,
 );
 
-const flowIrTool = flowIr({ architectApi });
+const flowIrTool = flowIr({
+    architectApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+});
 server.registerTool("flow_ir", flowIrTool.config, flowIrTool.handler);
 
-const flowActionTool = flowAction({ architectApi });
+const flowActionTool = flowAction({
+    architectApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+});
 server.registerTool(
     "flow_action",
     flowActionTool.config,
     flowActionTool.handler,
 );
 
-const searchInFlowTool = searchInFlow({ architectApi });
+const searchInFlowTool = searchInFlow({
+    architectApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+});
 server.registerTool(
     "search_in_flow",
     searchInFlowTool.config,

@@ -22,7 +22,11 @@ async function createLinkedClient(
     routingApi: RoutingApi,
 ): Promise<{ client: Client; close: () => Promise<void> }> {
     const server = new McpServer({ name: "test-server", version: "0.0.0" });
-    const findQueueTool = findQueue({ routingApi });
+    const findQueueTool = findQueue({
+        routingApi,
+        clientId: "test-client-id",
+        clientSecret: "test-client-secret",
+    });
     server.registerTool(
         "find_queue",
         findQueueTool.config,
@@ -102,6 +106,8 @@ describe("find_queue — handler behaviour", () => {
                 ],
                 total: 1,
             })),
+            clientId: "test-client-id",
+            clientSecret: "test-client-secret",
         });
 
         const result = await tool.handler({ name: "sales" });
@@ -129,6 +135,8 @@ describe("find_queue — handler behaviour", () => {
                 ],
                 total: 2,
             })),
+            clientId: "test-client-id",
+            clientSecret: "test-client-secret",
         });
 
         const result = await tool.handler({ name: "Sales" });
@@ -142,6 +150,8 @@ describe("find_queue — handler behaviour", () => {
                 entities: [],
                 total: 0,
             })),
+            clientId: "test-client-id",
+            clientSecret: "test-client-secret",
         });
 
         const result = await tool.handler({ name: "nonexistent" });
@@ -157,6 +167,8 @@ describe("find_queue — handler behaviour", () => {
             routingApi: fakeRoutingApi(async () => {
                 throw { status: 403, message: "Forbidden" };
             }),
+            clientId: "test-client-id",
+            clientSecret: "test-client-secret",
         });
 
         const result = await tool.handler({ name: "sales" });

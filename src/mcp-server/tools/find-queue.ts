@@ -1,6 +1,7 @@
 import type platformClient from "purecloud-platform-client-v2";
 import type { RoutingApi } from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
+import { ensureApiClientAuth } from "../auth/ensure-api-client-auth.ts";
 import { formatApiError, toApiError } from "./api-error.ts";
 import { isExactNameMatch, moveExactMatchToTop } from "./name-match.ts";
 import type { ToolFactory } from "./types.ts";
@@ -73,6 +74,8 @@ function toQueueSummary(queue: platformClient.Models.Queue): QueueSummary {
 
 export interface ToolConfig {
     routingApi: RoutingApi;
+    clientId: string;
+    clientSecret: string;
 }
 
 const inputSchema = {
@@ -89,6 +92,8 @@ const inputSchema = {
 
 export const findQueue: ToolFactory<ToolConfig, typeof inputSchema> = ({
     routingApi,
+    clientId,
+    clientSecret,
 }: ToolConfig) => ({
     config: {
         description:
@@ -116,6 +121,7 @@ export const findQueue: ToolFactory<ToolConfig, typeof inputSchema> = ({
         inputSchema,
     },
     handler: async ({ name }) => {
+        await ensureApiClientAuth({ clientId, clientSecret });
         try {
             const queues: platformClient.Models.Queue[] = [];
             const wildcardName = toWildcardName(name);

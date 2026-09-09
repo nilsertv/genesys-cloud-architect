@@ -1,6 +1,7 @@
 import type platformClient from "purecloud-platform-client-v2";
 import type { ArchitectApi } from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
+import { ensureApiClientAuth } from "../auth/ensure-api-client-auth.ts";
 import { formatApiError, toApiError } from "./api-error.ts";
 import type { ToolFactory } from "./types.ts";
 
@@ -51,6 +52,8 @@ function buildResult(
 
 export interface ToolConfig {
     architectApi: ArchitectApi;
+    clientId: string;
+    clientSecret: string;
 }
 
 const inputSchema = {
@@ -59,6 +62,8 @@ const inputSchema = {
 
 export const flowDependencies: ToolFactory<ToolConfig, typeof inputSchema> = ({
     architectApi,
+    clientId,
+    clientSecret,
 }: ToolConfig) => ({
     config: {
         description:
@@ -72,6 +77,7 @@ export const flowDependencies: ToolFactory<ToolConfig, typeof inputSchema> = ({
         inputSchema,
     },
     handler: async ({ flowId }) => {
+        await ensureApiClientAuth({ clientId, clientSecret });
         try {
             let flow: platformClient.Models.Flow;
             try {

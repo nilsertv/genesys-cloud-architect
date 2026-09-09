@@ -1,5 +1,6 @@
 import type { Models, TextbotsApi } from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
+import { ensureApiClientAuth } from "../auth/ensure-api-client-auth.ts";
 import type { ToolFactory } from "./types.ts";
 
 const sessions = new Map<string, string>();
@@ -59,10 +60,14 @@ async function drainNoOps(
 
 export interface TestBotFlowConfig {
     textbotsApi: TextbotsApi;
+    clientId: string;
+    clientSecret: string;
 }
 
 export const testBotFlow: ToolFactory<TestBotFlowConfig> = ({
     textbotsApi,
+    clientId,
+    clientSecret,
 }) => ({
     config: {
         description:
@@ -99,6 +104,7 @@ export const testBotFlow: ToolFactory<TestBotFlowConfig> = ({
         },
     },
     handler: async ({ flowId, sessionId, message }) => {
+        await ensureApiClientAuth({ clientId, clientSecret });
         try {
             if (sessionId && flowId) {
                 return {

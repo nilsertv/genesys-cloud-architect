@@ -1,6 +1,7 @@
 import type platformClient from "purecloud-platform-client-v2";
 import type { ArchitectApi } from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
+import { ensureApiClientAuth } from "../auth/ensure-api-client-auth.ts";
 import { formatApiError } from "./api-error.ts";
 import { isExactNameMatch, moveExactMatchToTop } from "./name-match.ts";
 import type { ToolFactory } from "./types.ts";
@@ -41,6 +42,8 @@ function toFlowSummary(flow: platformClient.Models.Flow): FlowSummary {
 
 export interface ToolConfig {
     architectApi: ArchitectApi;
+    clientId: string;
+    clientSecret: string;
 }
 
 const inputSchema = {
@@ -64,6 +67,8 @@ const inputSchema = {
 
 export const findFlow: ToolFactory<ToolConfig, typeof inputSchema> = ({
     architectApi,
+    clientId,
+    clientSecret,
 }: ToolConfig) => ({
     config: {
         description:
@@ -85,6 +90,7 @@ export const findFlow: ToolFactory<ToolConfig, typeof inputSchema> = ({
         inputSchema,
     },
     handler: async ({ name, type }) => {
+        await ensureApiClientAuth({ clientId, clientSecret });
         try {
             const flows: platformClient.Models.Flow[] = [];
 

@@ -1,5 +1,6 @@
 import type { ArchitectApi } from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
+import { ensureApiClientAuth } from "../auth/ensure-api-client-auth.ts";
 import { fetchFlowConfiguration } from "./fetch-flow-configuration.ts";
 import { type IRTask, parseFlow } from "./flow-ir-parser.ts";
 import type { ToolFactory } from "./types.ts";
@@ -27,6 +28,8 @@ function findTask(
 
 export interface ToolConfig {
     architectApi: ArchitectApi;
+    clientId: string;
+    clientSecret: string;
 }
 
 const inputSchema = {
@@ -46,6 +49,8 @@ const inputSchema = {
 
 export const flowIr: ToolFactory<ToolConfig, typeof inputSchema> = ({
     architectApi,
+    clientId,
+    clientSecret,
 }: ToolConfig) => ({
     config: {
         description:
@@ -62,6 +67,7 @@ export const flowIr: ToolFactory<ToolConfig, typeof inputSchema> = ({
         inputSchema,
     },
     handler: async ({ flowId, task }) => {
+        await ensureApiClientAuth({ clientId, clientSecret });
         const fetched = await fetchFlowConfiguration(architectApi, flowId);
         if (!fetched.ok) {
             return {

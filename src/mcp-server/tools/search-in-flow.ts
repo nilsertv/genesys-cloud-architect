@@ -1,5 +1,6 @@
 import type { ArchitectApi } from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
+import { ensureApiClientAuth } from "../auth/ensure-api-client-auth.ts";
 import { fetchFlowConfiguration } from "./fetch-flow-configuration.ts";
 import {
     type RawActionSearchMatch,
@@ -9,6 +10,8 @@ import type { ToolFactory } from "./types.ts";
 
 export interface ToolConfig {
     architectApi: ArchitectApi;
+    clientId: string;
+    clientSecret: string;
 }
 
 /** Caps the response size; matched actions beyond this are counted but not returned. */
@@ -119,6 +122,8 @@ const inputSchema = {
 
 export const searchInFlow: ToolFactory<ToolConfig, typeof inputSchema> = ({
     architectApi,
+    clientId,
+    clientSecret,
 }: ToolConfig) => ({
     config: {
         description:
@@ -143,6 +148,7 @@ export const searchInFlow: ToolFactory<ToolConfig, typeof inputSchema> = ({
         inputSchema,
     },
     handler: async ({ flowId, pattern, regex, caseSensitive }) => {
+        await ensureApiClientAuth({ clientId, clientSecret });
         // Compiled before the fetch so a bad expression costs nothing.
         const plan = buildQuery(pattern, regex, caseSensitive);
         if (!plan.ok) {

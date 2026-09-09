@@ -1,11 +1,14 @@
 import type { ArchitectApi } from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
+import { ensureApiClientAuth } from "../auth/ensure-api-client-auth.ts";
 import { fetchFlowConfiguration } from "./fetch-flow-configuration.ts";
 import { findRawActions, type RawActionLookup } from "./raw-action-lookup.ts";
 import type { ToolFactory } from "./types.ts";
 
 export interface ToolConfig {
     architectApi: ArchitectApi;
+    clientId: string;
+    clientSecret: string;
 }
 
 /** Caps the response size; one flow's configuration serves the whole batch. */
@@ -66,6 +69,8 @@ const inputSchema = {
 
 export const flowAction: ToolFactory<ToolConfig, typeof inputSchema> = ({
     architectApi,
+    clientId,
+    clientSecret,
 }: ToolConfig) => ({
     config: {
         description:
@@ -85,6 +90,7 @@ export const flowAction: ToolFactory<ToolConfig, typeof inputSchema> = ({
         inputSchema,
     },
     handler: async ({ flowId, actionIds }) => {
+        await ensureApiClientAuth({ clientId, clientSecret });
         const fetched = await fetchFlowConfiguration(architectApi, flowId);
         if (!fetched.ok) {
             return {
