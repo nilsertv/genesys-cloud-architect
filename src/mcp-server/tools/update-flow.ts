@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod/v3";
+import { isTokenExpired, type UserToken } from "../auth/user-token-store.ts";
 import type { ToolFactory } from "./types.ts";
 
 interface FlowDiffEntry {
@@ -96,6 +97,7 @@ export interface UpdateFlowConfig {
     readonly region: string;
     readonly clientId: string;
     readonly clientSecret: string;
+    readonly getUserToken: () => UserToken | undefined;
 }
 
 // NOTE: `inputSchema` MUST stay a flat `ZodRawShape` (plain `{ field: z... }`
@@ -253,6 +255,12 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
             nodeArgs.push("--confirm-publish");
         }
 
+        const userToken = toolConfig.getUserToken();
+        const userAccessToken =
+            userToken && !isTokenExpired(userToken)
+                ? userToken.accessToken
+                : undefined;
+
         return new Promise((resolve) => {
             const logs: string[] = [];
             let resultLine: UpdateRunnerLine | undefined;
@@ -274,6 +282,7 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
                     GENESYS_REGION: toolConfig.region,
                     GENESYS_CLIENT_ID: toolConfig.clientId,
                     GENESYS_CLIENT_SECRET: toolConfig.clientSecret,
+                    GENESYS_USER_ACCESS_TOKEN: userAccessToken,
                 },
                 cwd: path.dirname(absolutePath),
                 stdio: ["ignore", "pipe", "pipe"],
@@ -291,6 +300,18 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
                     ],
                 });
             }, UPDATE_TIMEOUT_MS);
+
+            child.on("error", (err) => {
+                settle({
+                    isError: true,
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to start update runner: ${err.message}`,
+                        },
+                    ],
+                });
+            });
 
             let stdoutBuf = "";
             child.stdout.on("data", (chunk: Buffer) => {

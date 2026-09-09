@@ -25,6 +25,7 @@ describe("deploy_flow — spawn failure", () => {
                 region: "us_east_1",
                 clientId: "fake-client-id",
                 clientSecret: "fake-client-secret",
+                getUserToken: () => undefined,
             });
 
             const result = await tool.handler({ flowFile });

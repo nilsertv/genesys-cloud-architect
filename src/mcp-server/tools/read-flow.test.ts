@@ -25,6 +25,7 @@ async function createLinkedClient(): Promise<{
         region: "us_east_1",
         clientId: "fake-client-id",
         clientSecret: "fake-client-secret",
+        getUserToken: () => undefined,
     });
     server.registerTool("read_flow", readFlowTool.config, readFlowTool.handler);
 

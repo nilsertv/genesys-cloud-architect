@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod/v3";
+import { isTokenExpired, type UserToken } from "../auth/user-token-store.ts";
 import type { ToolFactory } from "./types.ts";
 
 interface DeployRunnerLine {
@@ -22,6 +23,7 @@ export interface DeployFlowConfig {
     readonly region: string;
     readonly clientId: string;
     readonly clientSecret: string;
+    readonly getUserToken: () => UserToken | undefined;
 }
 
 export const deployFlow: ToolFactory<DeployFlowConfig> = (toolConfig) => ({
@@ -63,6 +65,12 @@ export const deployFlow: ToolFactory<DeployFlowConfig> = (toolConfig) => ({
             absolutePath,
         ];
 
+        const userToken = toolConfig.getUserToken();
+        const userAccessToken =
+            userToken && !isTokenExpired(userToken)
+                ? userToken.accessToken
+                : undefined;
+
         return new Promise((resolve) => {
             const logs: string[] = [];
             let resultLine: DeployRunnerLine | undefined;
@@ -84,6 +92,7 @@ export const deployFlow: ToolFactory<DeployFlowConfig> = (toolConfig) => ({
                     GENESYS_REGION: toolConfig.region,
                     GENESYS_CLIENT_ID: toolConfig.clientId,
                     GENESYS_CLIENT_SECRET: toolConfig.clientSecret,
+                    GENESYS_USER_ACCESS_TOKEN: userAccessToken,
                 },
                 cwd: path.dirname(absolutePath),
                 stdio: ["ignore", "pipe", "pipe"],
