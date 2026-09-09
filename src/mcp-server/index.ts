@@ -22,16 +22,14 @@ import { searchInFlow } from "./tools/search-in-flow.ts";
 import { testBotFlow } from "./tools/test-bot-flow.ts";
 import { updateFlow } from "./tools/update-flow.ts";
 
-// Fallback for launch contexts where .mcp.json's ${VAR} expansion had nothing
-// to expand (e.g. direnv wasn't loaded in the shell that started Claude Code).
-// CLAUDE_PROJECT_DIR is the documented, stable project root — not `cwd`,
-// which Claude Code does not guarantee for spawned MCP servers.
-if (!process.env.GENESYS_CLIENT_ID && process.env.CLAUDE_PROJECT_DIR) {
-    // override: true — .mcp.json's `${VAR:-}` expansion pre-populates these
-    // keys as empty strings when unset, and dotenv only fills in *missing*
-    // keys by default, so without this the fallback silently no-ops.
+// Fallback for launch contexts where the MCP client didn't forward env vars
+// directly. Looks for .env in CLAUDE_PROJECT_DIR (Claude Code) or process.cwd()
+// (Antigravity agy, Cursor, VS Code, standalone).
+const projectDir = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
+if (!process.env.GENESYS_CLIENT_ID) {
+    // override: true — pre-populated empty env vars don't block loading values from .env
     loadDotenv({
-        path: path.join(process.env.CLAUDE_PROJECT_DIR, ".env"),
+        path: path.join(projectDir, ".env"),
         override: true,
     });
 }
@@ -43,7 +41,13 @@ const envResults = z
         GENESYS_CLIENT_SECRET: z.string().min(1),
         GENESYS_PKCE_CLIENT_ID: z.string().min(1).optional(),
         GENESYS_PKCE_CLIENT_SECRET: z.string().min(1).optional(),
-        DEPLOY_SCRIPT_PATH: z.string().min(1),
+        DEPLOY_SCRIPT_PATH: z.preprocess(
+            (v) =>
+                typeof v === "string" && v.length > 0
+                    ? v
+                    : path.resolve(__dirname, "../bin/deploy-runner.js"),
+            z.string().min(1),
+        ),
         // Used for MCP Server smoke test in CI workflow
         PREVENT_LOGIN: z
             .enum(["TRUE", "FALSE"])
@@ -66,9 +70,7 @@ const envVars = envResults.data;
 // login IIFE further down (not here) so this stays synchronous: esbuild's
 // cjs output format (see package.json's build:mcp-server script) does not
 // support top-level await.
-const tokenFilePath = resolveTokenFilePath(
-    process.env.CLAUDE_PROJECT_DIR ?? process.cwd(),
-);
+const tokenFilePath = resolveTokenFilePath(projectDir);
 
 const server = new McpServer({
     name: "genesys-cloud-architect",
