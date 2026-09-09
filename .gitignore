@@ -8,3 +8,4 @@ skills-lock.json
 *.dev.ts
 exports/
 .genesys-user-token.json
+.atl/
