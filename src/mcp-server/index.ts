@@ -22,21 +22,24 @@ import { searchInFlow } from "./tools/search-in-flow.ts";
 import { testBotFlow } from "./tools/test-bot-flow.ts";
 import { updateFlow } from "./tools/update-flow.ts";
 
+process.env.DOTENV_CONFIG_QUIET = "true";
 // Fallback for launch contexts where the MCP client didn't forward env vars
 // directly. Looks for .env in CLAUDE_PROJECT_DIR (Claude Code) or process.cwd()
 // (Antigravity agy, Cursor, VS Code, standalone).
 const projectDir = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
 if (!process.env.GENESYS_CLIENT_ID && !process.env.GENESYS_PKCE_CLIENT_ID) {
     // override: true — pre-populated empty env vars don't block loading values from .env
+    // quiet: true — dotenv v17 logs "◇ injected env..." to stdout by default, which corrupts MCP JSON-RPC
     loadDotenv({
         path: path.join(projectDir, ".env"),
         override: true,
+        quiet: true,
     });
 }
 
 const envSchema = z
     .object({
-        GENESYS_REGION: z.string().min(1),
+        GENESYS_REGION: z.string().min(1).default("mypurecloud.com"),
         GENESYS_CLIENT_ID: z.string().min(1).optional(),
         GENESYS_CLIENT_SECRET: z.string().min(1).optional(),
         GENESYS_PKCE_CLIENT_ID: z.string().min(1).optional(),
@@ -75,6 +78,7 @@ if (!envResults.success) {
 }
 
 const envVars = envResults.data;
+process.env.GENESYS_REGION = envVars.GENESYS_REGION;
 
 // PKCE user login (opt-in, see auth/). The token file lives inside the
 // project, not ~/.config — resolved from the project root the same way the
