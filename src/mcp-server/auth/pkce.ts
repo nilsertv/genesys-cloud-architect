@@ -91,11 +91,19 @@ export function buildTokenExchangeRequest(params: {
     };
 }
 
-/** Converts an OAuth `expires_in` (seconds) into an absolute epoch-ms expiry. */
+/**
+ * Converts an OAuth `expires_in` (seconds) into an absolute epoch-ms expiry.
+ * Throws if `expiresIn` isn't a finite, positive number — a malformed or
+ * missing `expires_in` would otherwise silently produce `NaN`, which
+ * `isTokenExpired` always treats as not-yet-expired.
+ */
 export function parseExpiresAt(
     expiresIn: number,
     now: number = Date.now(),
 ): number {
+    if (!Number.isFinite(expiresIn) || expiresIn <= 0) {
+        throw new Error(`Invalid expires_in from token response: ${expiresIn}`);
+    }
     return now + expiresIn * 1000;
 }
 

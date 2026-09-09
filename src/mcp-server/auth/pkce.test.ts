@@ -80,6 +80,22 @@ describe("parseExpiresAt", () => {
     it("adds expiresIn seconds (as ms) to now", () => {
         assert.equal(parseExpiresAt(3600, 1_000_000), 1_000_000 + 3_600_000);
     });
+
+    it("throws for NaN", () => {
+        assert.throws(() => parseExpiresAt(NaN, 1_000_000));
+    });
+
+    it("throws for Infinity", () => {
+        assert.throws(() => parseExpiresAt(Infinity, 1_000_000));
+    });
+
+    it("throws for zero", () => {
+        assert.throws(() => parseExpiresAt(0, 1_000_000));
+    });
+
+    it("throws for a negative number", () => {
+        assert.throws(() => parseExpiresAt(-60, 1_000_000));
+    });
 });
 
 describe("parseCallbackQuery", () => {
