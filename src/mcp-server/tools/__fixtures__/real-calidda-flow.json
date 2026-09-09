@@ -1,0 +1,865 @@
+{
+    "defaultLanguage": "en-US",
+    "description": "Disposable test flow created to empirically verify the update_flow MCP tool (SDD tasks 1.6/2.6). Safe to delete.",
+    "name": "ZZZ-SDD-Test-DoNotUse-UpdateFlow",
+    "nextTrackingNumber": 10,
+    "uiMetaData": {
+        "bridgeServerActions": [],
+        "screenPops": []
+    },
+    "supportedLanguages": ["en-US"],
+    "manifest": {
+        "ttsEngine": [
+            {
+                "name": "Genesys TTS",
+                "id": "genesys",
+                "context": [
+                    {
+                        "id": "en-US-tts"
+                    }
+                ]
+            }
+        ],
+        "ttsVoice": [
+            {
+                "name": "Jill",
+                "id": "genesys/Jill",
+                "context": [
+                    {
+                        "id": "en-US-tts"
+                    }
+                ]
+            }
+        ],
+        "language": [
+            {
+                "id": "en-US"
+            }
+        ],
+        "userPrompt": [],
+        "systemPrompt": [
+            {
+                "context": [
+                    {
+                        "id": "defaultSettings"
+                    }
+                ],
+                "id": "__processing__",
+                "name": "processing"
+            }
+        ]
+    },
+    "type": "inboundcall",
+    "isSecure": false,
+    "debugSettings": {},
+    "disableAsr": {
+        "config": {
+            "lit": {
+                "pos": 1,
+                "text": "false",
+                "type": "bln"
+            }
+        },
+        "text": "false",
+        "type": "bln",
+        "uiMetaData": {
+            "mode": 1
+        },
+        "metaData": {},
+        "version": 2
+    },
+    "disableAsrCompanyDirectory": {
+        "config": {
+            "lit": {
+                "pos": 1,
+                "text": "true",
+                "type": "bln"
+            }
+        },
+        "text": "true",
+        "type": "bln",
+        "uiMetaData": {
+            "mode": 1
+        },
+        "metaData": {},
+        "version": 2
+    },
+    "errorHandling": {
+        "audio": {
+            "bargeInExpression": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "true",
+                        "type": "bln"
+                    }
+                },
+                "text": "true",
+                "type": "bln",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "flushExpression": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "false",
+                        "type": "bln"
+                    }
+                },
+                "text": "false",
+                "type": "bln",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2,
+                "outOfService": true
+            },
+            "defaultAudio": {
+                "config": {
+                    "AudioPlaybackOptions": {
+                        "pos": 1,
+                        "text": "AudioPlaybackOptions(ToAudioTTS(\"Sorry, an error occurred. Please try your call again.\"), true)",
+                        "operands": [
+                            {
+                                "ToAudioTTS": {
+                                    "pos": 22,
+                                    "operands": [
+                                        {
+                                            "lit": {
+                                                "pos": 33,
+                                                "text": "Sorry, an error occurred. Please try your call again.",
+                                                "type": "str"
+                                            }
+                                        }
+                                    ],
+                                    "type": "aud"
+                                }
+                            },
+                            {
+                                "lit": {
+                                    "pos": 91,
+                                    "text": "true",
+                                    "type": "bln"
+                                }
+                            }
+                        ],
+                        "type": "aud"
+                    }
+                },
+                "text": "AudioPlaybackOptions(ToAudioTTS(\"Sorry, an error occurred. Please try your call again.\"), true)",
+                "type": "aud",
+                "uiMetaData": {
+                    "sequenceItems": [
+                        {
+                            "type": 0,
+                            "parameter": "Sorry, an error occurred. Please try your call again.",
+                            "error": ""
+                        }
+                    ],
+                    "customExpressionMode": false,
+                    "optional": true
+                },
+                "metaData": {}
+            },
+            "cases": []
+        },
+        "queue": {
+            "config": {
+                "emp": {
+                    "pos": 1,
+                    "text": "",
+                    "type": "que"
+                }
+            },
+            "text": "",
+            "type": "que",
+            "uiMetaData": {
+                "mode": 1
+            },
+            "metaData": {},
+            "version": 2,
+            "outOfService": true
+        },
+        "handlingType": "Disconnect"
+    },
+    "initialPrompts": {
+        "bargeInExpression": {
+            "config": {
+                "lit": {
+                    "pos": 1,
+                    "text": "true",
+                    "type": "bln"
+                }
+            },
+            "text": "true",
+            "type": "bln",
+            "uiMetaData": {
+                "mode": 1
+            },
+            "metaData": {},
+            "version": 2
+        },
+        "flushExpression": {
+            "config": {
+                "lit": {
+                    "pos": 1,
+                    "text": "false",
+                    "type": "bln"
+                }
+            },
+            "text": "false",
+            "type": "bln",
+            "uiMetaData": {
+                "mode": 1
+            },
+            "metaData": {},
+            "version": 2,
+            "outOfService": true
+        },
+        "defaultAudio": {
+            "config": {
+                "emp": {
+                    "pos": 1,
+                    "text": "",
+                    "type": "aud"
+                }
+            },
+            "text": "",
+            "type": "aud",
+            "uiMetaData": {
+                "sequenceItems": []
+            },
+            "metaData": {}
+        },
+        "cases": []
+    },
+    "speechRecCompanyDirectory": {
+        "config": {
+            "lit": {
+                "pos": 1,
+                "text": "false",
+                "type": "bln"
+            }
+        },
+        "text": "false",
+        "type": "bln",
+        "uiMetaData": {
+            "mode": 1
+        },
+        "metaData": {},
+        "version": 2
+    },
+    "speechRecEngine": {
+        "config": {
+            "lit": {
+                "pos": 1,
+                "text": "",
+                "type": "str"
+            }
+        },
+        "text": "",
+        "type": "str",
+        "uiMetaData": {
+            "mode": 1
+        },
+        "metaData": {}
+    },
+    "suppressRecording": {
+        "config": {
+            "lit": {
+                "pos": 1,
+                "text": "true",
+                "type": "bln"
+            }
+        },
+        "text": "true",
+        "type": "bln",
+        "uiMetaData": {
+            "mode": 1
+        },
+        "metaData": {},
+        "version": 2
+    },
+    "customDefinitions": {
+        "dataTypeDefinitions": [
+            {
+                "id": "jsn__architect::skill_expression_filter",
+                "name": "SkillExpressionFilter",
+                "dataTypeId": "jsn__architect::skill_expression_filter",
+                "properties": [
+                    {
+                        "id": "raw",
+                        "name": "raw",
+                        "description": "The input filter String used to create this Skill Expression Filter instance.",
+                        "dataTypeId": "str",
+                        "isCollection": false,
+                        "readOnly": true
+                    },
+                    {
+                        "id": "normalized",
+                        "name": "normalized",
+                        "description": "If valid, this holds the normalized expression filter text.  Otherwise, this will be a NOT_SET String.",
+                        "dataTypeId": "str",
+                        "isCollection": false,
+                        "readOnly": true
+                    },
+                    {
+                        "id": "acdSkills",
+                        "name": "acdSkills",
+                        "description": "If valid, the items in this collection will be ACD Skills referenced by the filter.  Otherwise, this will be an empty collection.",
+                        "dataTypeId": "skl",
+                        "isCollection": true,
+                        "readOnly": true
+                    },
+                    {
+                        "id": "languageSkills",
+                        "name": "languageSkills",
+                        "description": "If valid, the items in this collection will be Language Skills referenced by the filter.  Otherwise, this will be an empty collection.",
+                        "dataTypeId": "lac",
+                        "isCollection": true,
+                        "readOnly": true
+                    },
+                    {
+                        "id": "errors",
+                        "name": "errors",
+                        "description": "If invalid, the items in this collection will contain error information about the input filter String.",
+                        "dataTypeId": "jsn__architect::issue_info",
+                        "isCollection": true,
+                        "readOnly": true
+                    }
+                ]
+            },
+            {
+                "id": "jsn__architect::issue_info",
+                "name": "IssueInfo",
+                "dataTypeId": "jsn__architect::issue_info",
+                "properties": [
+                    {
+                        "id": "type",
+                        "name": "type",
+                        "description": "A non-empty String that contains the type or category of the issue.",
+                        "dataTypeId": "str",
+                        "isCollection": false,
+                        "readOnly": true
+                    },
+                    {
+                        "id": "message",
+                        "name": "message",
+                        "description": "A non-localized message for the issue. The String may be empty or NOT_SET.",
+                        "dataTypeId": "str",
+                        "isCollection": false,
+                        "readOnly": true
+                    }
+                ]
+            }
+        ]
+    },
+    "defaultSettings": {
+        "PlayAudioOnSilenceAction": {
+            "allowedRepeatCount": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "5",
+                        "type": "int"
+                    }
+                },
+                "text": "5",
+                "type": "int",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "silenceDuration": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M1S0F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M1S0F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "timeout": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M40S0F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M40S0F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        "DetectSilenceAction": {
+            "silenceDuration": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M1S0F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M1S0F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "timeout": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M40S0F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M40S0F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        "DataAction": {
+            "processingPrompt": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "processing",
+                        "type": "pmt",
+                        "val": "__processing__"
+                    }
+                },
+                "text": "processing",
+                "type": "pmt",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        "CollectInputAction": {
+            "interDigitTimeout": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M3S0F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M3S0F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "noEntryTimeout": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M5S0F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M5S0F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        "DialExtensionAction": {
+            "digitTimeout": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M6S0F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M6S0F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        "TransferUserAction": {
+            "connTimeout": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "dur"
+                    }
+                },
+                "text": "",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        "TransferExternalAction": {
+            "connTimeout": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "dur"
+                    }
+                },
+                "text": "",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        "TransferGroupAction": {
+            "connTimeout": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "dur"
+                    }
+                },
+                "text": "",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        "TransferFlowSecureAction": {
+            "connTimeout": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M15S0F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M15S0F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        "Menu": {
+            "promptRepeatCount": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "3",
+                        "type": "int"
+                    }
+                },
+                "text": "3",
+                "type": "int",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "promptRepeatDelay": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M10S0F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M10S0F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "extensionDialingDelay": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M1S0F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M1S0F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "useExtensionDialing": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "true",
+                        "type": "bln"
+                    }
+                },
+                "text": "true",
+                "type": "bln",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        "SpeechRec": {
+            "speechRecMinConfidence": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "50",
+                        "type": "int"
+                    }
+                },
+                "text": "50",
+                "type": "int",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "speechRecTimeoutComplete": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M0S100F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M0S100F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "speechRecTimeoutIncomplete": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M0S1500F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M0S1500F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "speechRecTimeoutTotal": {
+                "config": {
+                    "lit": {
+                        "pos": 1,
+                        "text": "P0D0H0M20S0F",
+                        "type": "dur"
+                    }
+                },
+                "text": "P0D0H0M20S0F",
+                "type": "dur",
+                "uiMetaData": {
+                    "mode": 1
+                },
+                "metaData": {},
+                "version": 2
+            }
+        }
+    },
+    "flowMetaData": {
+        "flowDocumentVersion": "1.0",
+        "minimumServerVersion": "1.0",
+        "ttsDataVersion": "1.0"
+    },
+    "flowSequenceItemList": [],
+    "supportedLanguageOptions": [
+        {
+            "language": "en-US",
+            "languageSkill": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "lac"
+                    }
+                },
+                "text": "",
+                "type": "lac",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            },
+            "textToSpeech": {
+                "engine": {
+                    "selection": "default",
+                    "name": "Genesys TTS",
+                    "id": "genesys"
+                },
+                "voice": {
+                    "selection": "specific",
+                    "name": "Jill",
+                    "id": "genesys/Jill"
+                }
+            }
+        }
+    ],
+    "variables": [
+        {
+            "description": "Marker variable added by empirical update_flow test at 1784213392470",
+            "id": "36239f97-bc00-4c37-90a4-64e3903ca4af",
+            "isCollection": false,
+            "isInternal": false,
+            "isOutput": false,
+            "isInput": false,
+            "isSecure": false,
+            "version": "1.0",
+            "__type": "StringVariable",
+            "name": "Flow.EmpiricalUpdateTestMarker",
+            "initialValue": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "str"
+                    }
+                },
+                "text": "",
+                "type": "str",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        {
+            "description": "Marker variable added by an empirical update_flow test run",
+            "id": "a4b84546-fbe1-4548-a999-d1c4b3510c6a",
+            "isCollection": false,
+            "isInternal": false,
+            "isOutput": false,
+            "isInput": false,
+            "isSecure": false,
+            "version": "1.0",
+            "__type": "StringVariable",
+            "name": "Flow.EmpiricalUpdateTestMarker_1784213525751",
+            "initialValue": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "str"
+                    }
+                },
+                "text": "",
+                "type": "str",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            }
+        },
+        {
+            "id": "8b69ac59-9f2f-470e-9a58-5361279dde5d",
+            "isCollection": false,
+            "isInternal": false,
+            "isOutput": false,
+            "isInput": false,
+            "isSecure": false,
+            "version": "1.0",
+            "__type": "StringVariable",
+            "name": "Flow.SafeguardsCleanPath_1785520180558",
+            "initialValue": {
+                "config": {
+                    "emp": {
+                        "pos": 1,
+                        "text": "",
+                        "type": "str"
+                    }
+                },
+                "text": "",
+                "type": "str",
+                "uiMetaData": {
+                    "mode": 3
+                },
+                "metaData": {},
+                "version": 2
+            }
+        }
+    ],
+    "versionMetaData": {
+        "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": "Flow input schema",
+            "description": "Schema defining flow input parameters.  Property names map to flow scoped variables marked as a flow input.  If you do not supply a property value for an input variable, the variable value will be set to the initial value configured on it in the flow at flow startup.",
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        },
+        "outputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": "Flow output schema",
+            "description": "Schema defining flow output parameters.  Property names map to flow scoped variables marked as a flow output.",
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+        }
+    }
+}
