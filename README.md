@@ -83,6 +83,35 @@ If neither option provides the credentials, the MCP server fails to start with a
 `Missing required environment variables` error (surfaces to Claude Code as a `-32000` reconnect
 error).
 
+### Optional — log in as yourself (PKCE browser login)
+
+By default every action runs as the shared Client Credentials service account above — there's no
+per-user identity. If you'd rather run `deploy_flow`/`update_flow`/`read_flow` as yourself, you can
+opt in to a browser-based login instead. This is entirely optional: without it, nothing changes.
+
+1. In Genesys Admin, create an OAuth client with the **Code Authorization (PKCE)** grant type.
+   Register this exact redirect URI: `http://127.0.0.1:8917/callback`. If you need a different
+   port (e.g. it's already in use), set `GENESYS_PKCE_REDIRECT_PORT` and register the matching
+   `http://127.0.0.1:<port>/callback` instead — Genesys requires an exact match. Grant at least the
+   `organization:readonly`, `authorization:readonly`, `telephony:readonly`, and `architect` scopes —
+   without these, the Architect Scripting SDK session (used by `deploy_flow`/`update_flow`/`read_flow`)
+   fails to start with an HTTP 403, even though the token itself was issued successfully.
+2. Add the client's ID (and secret, if your client has one) to your `.env` file:
+
+   ```
+   GENESYS_PKCE_CLIENT_ID=your-pkce-oauth-client-id
+   GENESYS_PKCE_CLIENT_SECRET=your-pkce-oauth-client-secret
+   ```
+
+   The `login_user` tool only appears once `GENESYS_PKCE_CLIENT_ID` is set.
+3. Ask Claude to run the `login_user` tool. It opens your default browser to the Genesys Cloud
+   login page; after you sign in, the token is saved to `.genesys-user-token.json` in the project
+   root (already gitignored) and picked up automatically by `deploy_flow`/`update_flow`/`read_flow`
+   on their *next* call — no restart needed.
+
+There's no automatic token refresh yet: once the saved token expires, the server logs a warning
+and falls back to Client Credentials for that session — just run `login_user` again to refresh it.
+
 ## Updating
 
 This marketplace doesn't pin a semver version — `claude plugin update` tracks the latest commit

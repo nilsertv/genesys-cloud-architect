@@ -1,0 +1,23 @@
+{
+    "name": "MissingDuplicateActionIdTest",
+    "type": "inboundcall",
+    "flowSequenceItemList": [
+        {
+            "id": "task-1",
+            "name": "Task One",
+            "actionList": [
+                { "type": "DisconnectAction", "name": "No Id Action" },
+                {
+                    "id": "action-a",
+                    "type": "DisconnectAction",
+                    "name": "Disconnect A"
+                },
+                {
+                    "id": "action-a",
+                    "type": "DisconnectAction",
+                    "name": "Disconnect A Duplicate"
+                }
+            ]
+        }
+    ]
+}

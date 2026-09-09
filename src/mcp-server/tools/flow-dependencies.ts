@@ -1,6 +1,8 @@
 import type platformClient from "purecloud-platform-client-v2";
 import type { ArchitectApi } from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
+import { ensureApiClientAuth } from "../auth/ensure-api-client-auth.ts";
+import { formatApiError, toApiError } from "./api-error.ts";
 import type { ToolFactory } from "./types.ts";
 
 function flowTypeToObjectType(flowType: string): string {
@@ -50,10 +52,18 @@ function buildResult(
 
 export interface ToolConfig {
     architectApi: ArchitectApi;
+    clientId: string;
+    clientSecret: string;
 }
 
-export const flowDependencies: ToolFactory<ToolConfig> = ({
+const inputSchema = {
+    flowId: z.string().min(1).describe("The Genesys Cloud Architect flow ID"),
+};
+
+export const flowDependencies: ToolFactory<ToolConfig, typeof inputSchema> = ({
     architectApi,
+    clientId,
+    clientSecret,
 }: ToolConfig) => ({
     config: {
         description:
@@ -64,24 +74,26 @@ export const flowDependencies: ToolFactory<ToolConfig> = ({
             readOnlyHint: true,
             destructiveHint: false,
         },
-        inputSchema: {
-            flowId: z
-                .string()
-                .min(1)
-                .describe("The Genesys Cloud Architect flow ID"),
-        },
+        inputSchema,
     },
     handler: async ({ flowId }) => {
+        await ensureApiClientAuth({ clientId, clientSecret });
         try {
             let flow: platformClient.Models.Flow;
             try {
-                flow = await architectApi.getFlow(flowId as string);
-            } catch {
+                flow = await architectApi.getFlow(flowId);
+            } catch (err) {
+                // Distinguish a real 404 from auth failures, network errors,
+                // and permission denials instead of collapsing all of them
+                // into a generic "not found" (see docs/assessment.md).
+                const { status } = toApiError(err);
+                const text =
+                    status === 404
+                        ? `Flow "${flowId}" not found.`
+                        : `Failed to retrieve flow "${flowId}": ${formatApiError(err)}`;
                 return {
                     isError: true,
-                    content: [
-                        { type: "text", text: `Flow "${flowId}" not found.` },
-                    ],
+                    content: [{ type: "text", text }],
                 };
             }
 
@@ -105,9 +117,7 @@ export const flowDependencies: ToolFactory<ToolConfig> = ({
 
             const result = buildResult(flow, deps);
             return {
-                content: [
-                    { type: "text", text: JSON.stringify(result, null, 2) },
-                ],
+                content: [{ type: "text", text: JSON.stringify(result) }],
             };
         } catch (err) {
             return {
@@ -115,7 +125,7 @@ export const flowDependencies: ToolFactory<ToolConfig> = ({
                 content: [
                     {
                         type: "text",
-                        text: `Failed to retrieve flow dependencies: ${err instanceof Error ? err.message : String(err)}`,
+                        text: `Failed to retrieve flow dependencies: ${formatApiError(err)}`,
                     },
                 ],
             };

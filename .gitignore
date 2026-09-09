@@ -7,3 +7,5 @@ skills-lock.json
 .pnpm-store
 *.dev.ts
 exports/
+.genesys-user-token.json
+.atl/

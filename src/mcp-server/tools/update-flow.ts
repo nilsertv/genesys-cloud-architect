@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod/v3";
+import { buildRunnerEnv, type RunnerAuthConfig } from "./runner-env.ts";
 import type { ToolFactory } from "./types.ts";
 
 interface FlowDiffEntry {
@@ -36,6 +37,14 @@ interface UpdateRunnerLine {
     requestedDiff?: FlowDiffResult;
     baselinePath?: string;
     unrequestedPaths?: string[];
+    lockInfo?: {
+        lockedByUserName?: string;
+        lockedByUserEmail?: string;
+        dateLocked?: string;
+    };
+    baselineExportPath?: string;
+    diff?: FlowDiffResult;
+    requiresConfirmation?: boolean;
 }
 
 const UPDATE_TIMEOUT_MS = 120_000;
@@ -91,11 +100,8 @@ function formatDiffSummary(diff: FlowDiffResult | undefined): string {
     return lines.join("\n");
 }
 
-export interface UpdateFlowConfig {
+export interface UpdateFlowConfig extends RunnerAuthConfig {
     readonly deployScriptPath: string;
-    readonly region: string;
-    readonly clientId: string;
-    readonly clientSecret: string;
 }
 
 // NOTE: `inputSchema` MUST stay a flat `ZodRawShape` (plain `{ field: z... }`
@@ -269,12 +275,7 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
             };
 
             const child = spawn("node", nodeArgs, {
-                env: {
-                    ...process.env,
-                    GENESYS_REGION: toolConfig.region,
-                    GENESYS_CLIENT_ID: toolConfig.clientId,
-                    GENESYS_CLIENT_SECRET: toolConfig.clientSecret,
-                },
+                env: buildRunnerEnv(toolConfig),
                 cwd: path.dirname(absolutePath),
                 stdio: ["ignore", "pipe", "pipe"],
             });
@@ -291,6 +292,18 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
                     ],
                 });
             }, UPDATE_TIMEOUT_MS);
+
+            child.on("error", (err) => {
+                settle({
+                    isError: true,
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to start update runner: ${err.message}`,
+                        },
+                    ],
+                });
+            });
 
             let stdoutBuf = "";
             child.stdout.on("data", (chunk: Buffer) => {

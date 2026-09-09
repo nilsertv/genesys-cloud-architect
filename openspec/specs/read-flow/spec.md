@@ -69,7 +69,7 @@ error-collapsing anti-pattern).
 - GIVEN `flowName`+`flowType` where the name exists under a different type
 - WHEN `read_flow` attempts to load it via `loadFlowBy...Async`
 - THEN it MUST behave the same as "flow not found" — CONFIRMED empirically
-  (real "Calidda" org, `flowName: "ZZZ-SDD-Test-DoNotUse-UpdateFlow"` +
+  (a live test org, `flowName: "ZZZ-SDD-Test-DoNotUse-UpdateFlow"` +
   `flowType: "outboundcall"` instead of the real `"inboundcall"` returned
   `errorKind: "not-found"`, the same mapped message as a nonexistent flow),
   matching `update_flow`'s confirmed finding for
@@ -89,7 +89,7 @@ invalid values; its error MUST be surfaced, not swallowed.
 - GIVEN `flowVersion` omitted, `"debug"`, `"published"`, or a valid number
 - WHEN input is validated
 - THEN it MUST pass (omitted defaults to `"latest"`) and that version MUST be requested from the SDK
-- CONFIRMED (real "Calidda" org, `ZZZ-SDD-Test-DoNotUse-UpdateFlow`): omitted
+- CONFIRMED (a live test org, `ZZZ-SDD-Test-DoNotUse-UpdateFlow`): omitted
   (defaults to `"latest"`, success) and an explicit numeric version (`"3.0"`,
   taken from the flow's own observed `fileName`, success) both pass and
   return identical YAML. `"debug"` and `"published"` also pass client-side

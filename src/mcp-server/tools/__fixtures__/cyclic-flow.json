@@ -1,0 +1,30 @@
+{
+    "name": "CyclicFlowTest",
+    "type": "inboundcall",
+    "flowSequenceItemList": [
+        {
+            "id": "task-1",
+            "name": "Loop Task",
+            "startAction": "action-1",
+            "actionList": [
+                {
+                    "id": "action-1",
+                    "type": "PlayAudioAction",
+                    "name": "Prompt 1",
+                    "nextAction": "action-2"
+                },
+                {
+                    "id": "action-2",
+                    "type": "PlayAudioAction",
+                    "name": "Prompt 2",
+                    "nextAction": "action-1"
+                },
+                {
+                    "id": "orphan-action",
+                    "type": "DisconnectAction",
+                    "name": "Orphaned End"
+                }
+            ]
+        }
+    ]
+}

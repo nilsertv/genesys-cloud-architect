@@ -124252,6 +124252,35 @@ var import_node_path2 = __toESM(require("node:path"));
 var import_node_url = require("node:url");
 var import_node_util = require("node:util");
 
+// src/deploy-runner/session-auth.ts
+function resolveSessionAuth(env) {
+  if (!env.GENESYS_REGION) {
+    return {
+      ok: false,
+      error: "Missing required environment variable: GENESYS_REGION"
+    };
+  }
+  if (env.GENESYS_USER_ACCESS_TOKEN) {
+    return {
+      ok: true,
+      mode: "user-token",
+      accessToken: env.GENESYS_USER_ACCESS_TOKEN
+    };
+  }
+  if (env.GENESYS_CLIENT_ID && env.GENESYS_CLIENT_SECRET) {
+    return {
+      ok: true,
+      mode: "client-credentials",
+      clientId: env.GENESYS_CLIENT_ID,
+      clientSecret: env.GENESYS_CLIENT_SECRET
+    };
+  }
+  return {
+    ok: false,
+    error: "Missing required environment variables: GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET (or GENESYS_USER_ACCESS_TOKEN)"
+  };
+}
+
 // src/deploy-runner/update-helpers.ts
 var import_promises = require("node:fs/promises");
 var import_node_path = require("node:path");
@@ -124595,6 +124624,11 @@ function installLogging(scripting) {
     return false;
   });
 }
+function sessionStartFailureDetail() {
+  const lastHttp = httpErrors[httpErrors.length - 1];
+  const lastTrace = traces[traces.length - 1];
+  return lastHttp ? `HTTP ${lastHttp.status}: ${typeof lastHttp.body === "object" ? lastHttp.body.message || JSON.stringify(lastHttp.body) : lastHttp.body}` : lastTrace || "Session ended before authentication completed";
+}
 function startSession(scripting, { region, clientId, clientSecret }) {
   const session = scripting.environment.archSession;
   session.endTerminatesProcess = false;
@@ -124610,12 +124644,38 @@ function startSession(scripting, { region, clientId, clientSecret }) {
       clientSecret,
       function onEnding() {
         if (started) return;
-        const lastHttp = httpErrors[httpErrors.length - 1];
-        const lastTrace = traces[traces.length - 1];
-        const detail = lastHttp ? `HTTP ${lastHttp.status}: ${typeof lastHttp.body === "object" ? lastHttp.body.message || JSON.stringify(lastHttp.body) : lastHttp.body}` : lastTrace || "Session ended before authentication completed";
-        reject(new Error(`Session start failed \u2014 ${detail}`));
+        reject(
+          new Error(
+            `Session start failed \u2014 ${sessionStartFailureDetail()}`
+          )
+        );
       },
       true
+    );
+  });
+}
+function startSessionWithUserToken(scripting, { region, accessToken }) {
+  const session = scripting.environment.archSession;
+  session.endTerminatesProcess = false;
+  return new Promise((resolve, reject) => {
+    let started = false;
+    session.startWithAuthToken(
+      region,
+      function onStarted() {
+        started = true;
+        resolve(session);
+      },
+      accessToken,
+      function onEnding() {
+        if (started) return;
+        reject(
+          new Error(
+            `Session start failed \u2014 ${sessionStartFailureDetail()}`
+          )
+        );
+      },
+      false,
+      void 0
     );
   });
 }
@@ -124910,16 +124970,17 @@ async function main() {
     process.exit(1);
   }
   const absoluteFlowPath = flowFile ? import_node_path2.default.resolve(flowFile) : void 0;
-  const region = process.env.GENESYS_REGION;
-  const clientId = process.env.GENESYS_CLIENT_ID;
-  const clientSecret = process.env.GENESYS_CLIENT_SECRET;
-  if (!region || !clientId || !clientSecret) {
-    emit("result", {
-      success: false,
-      error: "Missing required environment variables: GENESYS_REGION, GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET"
-    });
+  const auth = resolveSessionAuth({
+    GENESYS_REGION: process.env.GENESYS_REGION,
+    GENESYS_CLIENT_ID: process.env.GENESYS_CLIENT_ID,
+    GENESYS_CLIENT_SECRET: process.env.GENESYS_CLIENT_SECRET,
+    GENESYS_USER_ACCESS_TOKEN: process.env.GENESYS_USER_ACCESS_TOKEN
+  });
+  if (!auth.ok) {
+    emit("result", { success: false, error: auth.error });
     process.exit(1);
   }
+  const region = process.env.GENESYS_REGION;
   emit("log", "info", "Loading Architect Scripting SDK...");
   const scripting = require_scripting_bundle();
   installLogging(scripting);
@@ -124932,10 +124993,13 @@ async function main() {
     process.exit(1);
   }
   emit("log", "info", `Starting SDK session (region: ${sdkRegion})...`);
-  const session = await startSession(scripting, {
+  const session = auth.mode === "user-token" ? await startSessionWithUserToken(scripting, {
     region: sdkRegion,
-    clientId,
-    clientSecret
+    accessToken: auth.accessToken
+  }) : await startSession(scripting, {
+    region: sdkRegion,
+    clientId: auth.clientId,
+    clientSecret: auth.clientSecret
   });
   if (mode === "update") {
     const exportsDir = values["exports-dir"];

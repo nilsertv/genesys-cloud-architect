@@ -1,0 +1,18 @@
+{
+    "name": "UnresolvedReferenceTest",
+    "type": "inboundcall",
+    "flowSequenceItemList": [
+        {
+            "id": "task-1",
+            "name": "Task One",
+            "actionList": [
+                {
+                    "id": "jump-action",
+                    "type": "CallTaskAction",
+                    "name": "Jump To Missing Task",
+                    "taskId": "nonexistent-task"
+                }
+            ]
+        }
+    ]
+}

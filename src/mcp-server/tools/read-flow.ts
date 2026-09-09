@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { z } from "zod/v3";
+import { buildRunnerEnv, type RunnerAuthConfig } from "./runner-env.ts";
 import type { ToolFactory } from "./types.ts";
 
 interface ReadRunnerLine {
@@ -39,11 +40,8 @@ const ERROR_KIND_MESSAGES: Record<
     unknown: undefined,
 };
 
-export interface ReadFlowConfig {
+export interface ReadFlowConfig extends RunnerAuthConfig {
     readonly deployScriptPath: string;
-    readonly region: string;
-    readonly clientId: string;
-    readonly clientSecret: string;
 }
 
 // NOTE: `inputSchema` MUST stay a flat `ZodRawShape` (plain `{ field: z... }`
@@ -160,12 +158,7 @@ export const readFlow: ToolFactory<ReadFlowConfig> = (toolConfig) => ({
             };
 
             const child = spawn("node", nodeArgs, {
-                env: {
-                    ...process.env,
-                    GENESYS_REGION: toolConfig.region,
-                    GENESYS_CLIENT_ID: toolConfig.clientId,
-                    GENESYS_CLIENT_SECRET: toolConfig.clientSecret,
-                },
+                env: buildRunnerEnv(toolConfig),
                 stdio: ["ignore", "pipe", "pipe"],
             });
 
@@ -181,6 +174,18 @@ export const readFlow: ToolFactory<ReadFlowConfig> = (toolConfig) => ({
                     ],
                 });
             }, READ_TIMEOUT_MS);
+
+            child.on("error", (err) => {
+                settle({
+                    isError: true,
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to start read runner: ${err.message}`,
+                        },
+                    ],
+                });
+            });
 
             let stdoutBuf = "";
             child.stdout.on("data", (chunk: Buffer) => {

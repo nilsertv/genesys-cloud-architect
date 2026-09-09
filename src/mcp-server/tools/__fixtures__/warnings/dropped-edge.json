@@ -1,0 +1,19 @@
+{
+    "name": "DroppedEdgeTest",
+    "type": "inboundcall",
+    "flowSequenceItemList": [
+        {
+            "id": "task-1",
+            "name": "Task One",
+            "startAction": "action-1",
+            "actionList": [
+                {
+                    "id": "action-1",
+                    "type": "PlayAudioAction",
+                    "name": "Prompt",
+                    "nextActionId": "missing-action-id"
+                }
+            ]
+        }
+    ]
+}

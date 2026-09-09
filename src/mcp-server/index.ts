@@ -4,9 +4,21 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { config as loadDotenv } from "dotenv";
 import platformClient from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
+import { getUserToken, setUserToken } from "./auth/user-auth-state.ts";
+import {
+    isTokenExpired,
+    readUserToken,
+    resolveTokenFilePath,
+} from "./auth/user-token-store.ts";
 import { deployFlow } from "./tools/deploy-flow.ts";
+import { findFlow } from "./tools/find-flow.ts";
+import { findQueue } from "./tools/find-queue.ts";
+import { flowAction } from "./tools/flow-action.ts";
 import { flowDependencies } from "./tools/flow-dependencies.ts";
+import { flowIr } from "./tools/flow-ir.ts";
+import { loginUser } from "./tools/login-user.ts";
 import { readFlow } from "./tools/read-flow.ts";
+import { searchInFlow } from "./tools/search-in-flow.ts";
 import { testBotFlow } from "./tools/test-bot-flow.ts";
 import { updateFlow } from "./tools/update-flow.ts";
 
@@ -29,6 +41,8 @@ const envResults = z
         GENESYS_REGION: z.string().min(1),
         GENESYS_CLIENT_ID: z.string().min(1),
         GENESYS_CLIENT_SECRET: z.string().min(1),
+        GENESYS_PKCE_CLIENT_ID: z.string().min(1).optional(),
+        GENESYS_PKCE_CLIENT_SECRET: z.string().min(1).optional(),
         DEPLOY_SCRIPT_PATH: z.string().min(1),
         // Used for MCP Server smoke test in CI workflow
         PREVENT_LOGIN: z
@@ -46,13 +60,28 @@ if (!envResults.success) {
 
 const envVars = envResults.data;
 
+// PKCE user login (opt-in, see auth/). The token file lives inside the
+// project, not ~/.config — resolved from the project root the same way the
+// `.env` fallback above is. Actually reading the file happens inside the
+// login IIFE further down (not here) so this stays synchronous: esbuild's
+// cjs output format (see package.json's build:mcp-server script) does not
+// support top-level await.
+const tokenFilePath = resolveTokenFilePath(
+    process.env.CLAUDE_PROJECT_DIR ?? process.cwd(),
+);
+
 const server = new McpServer({
     name: "genesys-cloud-architect",
     version: process.env.npm_package_version ?? "0.0.0",
 });
 
+const architectApi = new platformClient.ArchitectApi();
+const routingApi = new platformClient.RoutingApi();
+
 const flowDependenciesTool = flowDependencies({
-    architectApi: new platformClient.ArchitectApi(),
+    architectApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
 });
 server.registerTool(
     "flow_dependencies",
@@ -65,6 +94,7 @@ const deployFlowTool = deployFlow({
     clientId: envVars.GENESYS_CLIENT_ID,
     clientSecret: envVars.GENESYS_CLIENT_SECRET,
     deployScriptPath: envVars.DEPLOY_SCRIPT_PATH,
+    getUserToken,
 });
 server.registerTool(
     "deploy_flow",
@@ -77,6 +107,7 @@ const updateFlowTool = updateFlow({
     clientId: envVars.GENESYS_CLIENT_ID,
     clientSecret: envVars.GENESYS_CLIENT_SECRET,
     deployScriptPath: envVars.DEPLOY_SCRIPT_PATH,
+    getUserToken,
 });
 server.registerTool(
     "update_flow",
@@ -89,11 +120,28 @@ const readFlowTool = readFlow({
     clientId: envVars.GENESYS_CLIENT_ID,
     clientSecret: envVars.GENESYS_CLIENT_SECRET,
     deployScriptPath: envVars.DEPLOY_SCRIPT_PATH,
+    getUserToken,
 });
 server.registerTool("read_flow", readFlowTool.config, readFlowTool.handler);
 
+const findFlowTool = findFlow({
+    architectApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+});
+server.registerTool("find_flow", findFlowTool.config, findFlowTool.handler);
+
+const findQueueTool = findQueue({
+    routingApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+});
+server.registerTool("find_queue", findQueueTool.config, findQueueTool.handler);
+
 const testBotFlowTool = testBotFlow({
     textbotsApi: new platformClient.TextbotsApi(),
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
 });
 server.registerTool(
     "test_bot_flow",
@@ -101,7 +149,73 @@ server.registerTool(
     testBotFlowTool.handler,
 );
 
+const flowIrTool = flowIr({
+    architectApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+});
+server.registerTool("flow_ir", flowIrTool.config, flowIrTool.handler);
+
+const flowActionTool = flowAction({
+    architectApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+});
+server.registerTool(
+    "flow_action",
+    flowActionTool.config,
+    flowActionTool.handler,
+);
+
+const searchInFlowTool = searchInFlow({
+    architectApi,
+    clientId: envVars.GENESYS_CLIENT_ID,
+    clientSecret: envVars.GENESYS_CLIENT_SECRET,
+});
+server.registerTool(
+    "search_in_flow",
+    searchInFlowTool.config,
+    searchInFlowTool.handler,
+);
+
+// PKCE user login is 100% opt-in: the login_user tool doesn't even exist in
+// the session unless a PKCE client id is configured.
+if (envVars.GENESYS_PKCE_CLIENT_ID) {
+    const loginUserTool = loginUser({
+        region: envVars.GENESYS_REGION,
+        pkceClientId: envVars.GENESYS_PKCE_CLIENT_ID,
+        pkceClientSecret: envVars.GENESYS_PKCE_CLIENT_SECRET,
+        tokenFilePath,
+    });
+    server.registerTool(
+        "login_user",
+        loginUserTool.config,
+        loginUserTool.handler,
+    );
+}
+
 void (async () => {
+    // Pick up a previously saved user token (from a prior login_user run),
+    // if it's still valid for the region this session is configured for.
+    // Never blocks/fails startup — a stale or unreadable token file just
+    // falls back to Client Credentials below, same as no token at all.
+    const storedUserToken = await readUserToken(tokenFilePath);
+    if (storedUserToken) {
+        if (
+            storedUserToken.region === envVars.GENESYS_REGION &&
+            !isTokenExpired(storedUserToken)
+        ) {
+            setUserToken(storedUserToken);
+        } else {
+            console.warn(
+                "Stored user token in .genesys-user-token.json is stale or " +
+                    "for a different region — falling back to Client " +
+                    "Credentials for this session. Run the login_user tool " +
+                    "to refresh it.",
+            );
+        }
+    }
+
     if (envVars.PREVENT_LOGIN) {
         console.warn(
             "Login for Platform API skipped. Calling tools will result in an auth failure.",
@@ -109,10 +223,15 @@ void (async () => {
     } else {
         const client = platformClient.ApiClient.instance;
         client.setEnvironment(envVars.GENESYS_REGION);
-        await client.loginClientCredentialsGrant(
-            envVars.GENESYS_CLIENT_ID,
-            envVars.GENESYS_CLIENT_SECRET,
-        );
+        const userToken = getUserToken();
+        if (userToken) {
+            client.setAccessToken(userToken.accessToken);
+        } else {
+            await client.loginClientCredentialsGrant(
+                envVars.GENESYS_CLIENT_ID,
+                envVars.GENESYS_CLIENT_SECRET,
+            );
+        }
     }
 
     const transport = new StdioServerTransport();

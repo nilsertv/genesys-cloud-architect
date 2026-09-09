@@ -1,244 +1,124 @@
-# React Flow Diagram Patterns
+# Mermaid Diagram Patterns
 
-## Import Map (Critical)
+## Shape Catalog
 
-The import map in the template uses esm.sh to load React and @xyflow/react without a build step. This exact pattern is tested and working — do not modify the URLs or query parameters.
+Mermaid's classic flowchart shapes carry conventional meaning borrowed from
+standard flowcharting. Use the same shape for the same concept in every
+diagram — consistency is what lets a reader learn the vocabulary once.
 
-Key details:
-- `?external=react,react-dom` on `@xyflow/react` prevents bundling a separate React copy, which would break hooks
-- `"react/": "https://esm.sh/react@18.3.1/"` handles subpath imports like `react/jsx-runtime`
-- The CSS is loaded from jsdelivr (not esm.sh) because esm.sh does not serve CSS files
+| Shape | Syntax | Semantic meaning |
+|---|---|---|
+| Stadium (pill) | `id(["Text"])` | Start / end / terminal state |
+| Rectangle | `id["Text"]` | A process step / action |
+| Rhombus | `id{"Text"}` | A decision / branch point |
+| Subroutine | `id[["Text"]]` | A call into a reusable sub-flow or sub-task |
+| Parallelogram | `id[/"Text"/]` | Input / output, data entering or leaving the flow |
+| Cylinder | `id[("Text")]` | A data store (database, queue, cache) |
+| Double circle | `id((("Text")))` | A hard stop / error terminal, distinct from a normal end |
+| Hexagon | `id{{"Text"}}` | A preparation / configuration step |
 
-## createElement Pattern
+Always quote the label text (`id["Text"]`, not `id[Text]`) — it is the only
+form that survives punctuation safely across every shape.
 
-Since there is no build step, all components use `createElement` (aliased as `h`) instead of JSX:
+## Color Palette
 
-```js
-import { createElement as h } from 'react';
+Apply color with `classDef` + `class`, never inline `style` per node. Define
+the palette once at the bottom of the diagram:
 
-// JSX equivalent: <div className="card"><span>Hello</span></div>
-h('div', { className: 'card' }, h('span', null, 'Hello'))
-
-// JSX equivalent: <Handle type="target" position={Position.Top} />
-h(Handle, { type: 'target', position: Position.Top })
-
-// Conditional rendering
-condition ? h('div', null, 'Yes') : null
-
-// Mapping arrays (spread into parent's children)
-h('div', null, ...items.map((item, i) => h('span', { key: i }, item)))
+```mermaid
+flowchart TD
+    classDef terminal fill:#166534,stroke:#14532d,color:#fff
+    classDef errorTerminal fill:#7f1d1d,stroke:#450a0a,color:#fff
+    classDef decision fill:#a16207,stroke:#713f12,color:#fff
+    classDef action fill:#1e3a5f,stroke:#1e293b,color:#fff
+    classDef warning fill:#78350f,stroke:#451a03,color:#fff,stroke-width:3px
 ```
 
-## Custom Node Types
+These are dark-background-safe colors with light text — legible whether the
+host renders in light or dark mode, since Mermaid's own node borders and
+default text keep working around them. Never rely on a hue distinction alone
+(e.g. two shades of blue for two different meanings) — pair every color with
+a distinct shape from the catalog above, so the diagram still communicates
+in grayscale.
 
-Every custom node must be defined as a component and registered in a `nodeTypes` object **outside the App component** (React Flow requirement — defining inside causes remounts):
+## Legend Cluster Pattern
 
-```js
-function MyNode({ data }) {
-    return h('div', { className: 'node-card' },
-        h(Handle, { type: 'target', position: Position.Top, style: { background: '#475569', width: 8, height: 8 } }),
-        h('div', { className: 'node-title' }, data.label),
-        h(Handle, { type: 'source', position: Position.Bottom, style: { background: '#475569', width: 8, height: 8 } }),
-    );
-}
+For a self-contained diagram (standalone HTML, no surrounding caption):
 
-// MUST be outside the component
-const nodeTypes = { myNode: MyNode };
+```mermaid
+flowchart LR
+    subgraph Legend
+        direction LR
+        L1(["terminal"]):::terminal
+        L2{"decision"}:::decision
+        L3["action"]:::action
+    end
+    classDef terminal fill:#166534,stroke:#14532d,color:#fff
+    classDef decision fill:#a16207,stroke:#713f12,color:#fff
+    classDef action fill:#1e3a5f,stroke:#1e293b,color:#fff
 ```
 
-Nodes reference the type by key: `{ id: '1', type: 'myNode', position: { x: 0, y: 0 }, data: { label: 'Hello' } }`.
+Place the legend subgraph first or last in the source (renders at an edge of
+the layout, not competing with the main graph's center).
 
-## Layout Strategies
+## Subgraph / Layout Patterns
 
-### Manual Tree Layout
+**Grouping by module or layer** (architecture/dependency diagrams):
 
-For small trees (< 20 nodes), calculate positions directly:
-
-```js
-const childCount = children.length;
-const spacing = 300;
-const totalWidth = (childCount - 1) * spacing;
-const startX = -totalWidth / 2;
-
-const nodes = [
-    { id: 'root', position: { x: 0, y: 0 }, ... },
-    ...children.map((child, i) => ({
-        id: child.id,
-        position: { x: startX + i * spacing, y: 320 },
-        ...
-    })),
-];
+```mermaid
+flowchart LR
+    subgraph API["API Layer"]
+        Router["Router"] --> Handler["Handler"]
+    end
+    subgraph Domain["Domain Layer"]
+        Handler --> Service["Service"]
+    end
+    subgraph Data["Data Layer"]
+        Service --> Repo["Repository"] --> DB[("Database")]
+    end
 ```
 
-### Multi-Level Tree Layout
+**Grouping by task** (a multi-task Architect flow — one subgraph per task
+keeps the auto-layout from tangling cross-task edges):
 
-For deeper trees, assign y based on depth and x based on sibling index:
-
-```js
-const LEVEL_HEIGHT = 300;
-const SIBLING_SPACING = 280;
-
-function layoutTree(node, depth = 0, siblingIndex = 0, siblingCount = 1) {
-    const totalWidth = (siblingCount - 1) * SIBLING_SPACING;
-    return {
-        id: node.id,
-        position: {
-            x: -totalWidth / 2 + siblingIndex * SIBLING_SPACING,
-            y: depth * LEVEL_HEIGHT,
-        },
-        ...
-    };
-}
+```mermaid
+flowchart TD
+    subgraph MainMenu["Task: Main Menu"]
+        MM_Start(["start"]) --> MM_Menu{"Menu"}
+    end
+    subgraph Billing["Task: Billing"]
+        B_Start(["start"]) --> B_Lookup["Lookup account"]
+    end
+    MM_Menu -->|"1: Billing"| B_Start
 ```
 
-### Grid Layout
+Prefer `LR` for a wide, shallow architecture map (few layers, many parallel
+components) and `TD` for a deep hierarchy or a step-by-step flow.
 
-For flat collections (no hierarchy):
+## Mapping `flow_ir` Output to Diagram Shapes
 
-```js
-const COLS = 4;
-const COL_WIDTH = 300;
-const ROW_HEIGHT = 200;
+When visualizing the graph produced by this plugin's `flow_ir` tool
+(`parseFlow`'s `IRNode`), map its `kind` and `terminal` fields directly:
 
-const nodes = items.map((item, i) => ({
-    id: item.id,
-    position: {
-        x: (i % COLS) * COL_WIDTH,
-        y: Math.floor(i / COLS) * ROW_HEIGHT,
-    },
-    ...
-}));
-```
+| IR field | Value | Shape | classDef |
+|---|---|---|---|
+| `kind` | `"task-start"` | Stadium `(["..."])` | `taskStart` |
+| `kind` | `"action"`, `terminal: false` | Rectangle `["..."]` | `action` |
+| `kind` | `"action"`, `terminal: true` | Stadium `(["..."])`, or double-circle `((("...")))` if it is `DisconnectAction`/an error path | `terminal` / `errorTerminal` |
+| `kind` | `"branch-output"` | Rhombus `{"..."}` (it represents a decision outcome) or a small labeled point if the branch has only one outgoing edge | `decision` |
 
-## Edge Patterns
+**Warnings**: give any node named in `ir.warnings[]` the `warning` classDef
+(thick amber border) in addition to its normal shape/color — this overlays
+onto the existing category rather than replacing it, so a warned decision
+node stays visually a decision, just flagged. Never silently drop a warned
+node from the diagram; the warning is exactly the thing worth surfacing.
 
-### Basic directed edge
+**Disabled branches** (`DISABLED_BRANCH` warning): render the edge with a
+dotted style (`-.->`) instead of a solid arrow — Mermaid supports this
+natively and it reads immediately as "present in the flow but not live."
 
-```js
-{ id: 'e1', source: 'a', target: 'b', animated: true, style: { stroke: '#475569', strokeWidth: 2 } }
-```
-
-### Labeled edge
-
-```js
-{ id: 'e1', source: 'a', target: 'b', label: 'calls', labelStyle: { fill: '#94a3b8', fontSize: 11 }, labelBgStyle: { fill: '#1e293b' } }
-```
-
-### Edge types
-
-- `default` — bezier curve (best for trees)
-- `smoothstep` — right-angled with rounded corners (best for flowcharts)
-- `step` — right-angled sharp corners
-- `straight` — direct line
-
-Set via `type` property: `{ id: 'e1', source: 'a', target: 'b', type: 'smoothstep' }`.
-
-## Color Palette (Dark Theme)
-
-| Purpose | Color | Usage |
-|---------|-------|-------|
-| Background | `#0f172a` | Page/canvas |
-| Card bg | `#1e293b` | Node cards |
-| Card border | `#334155` | Default border |
-| Card border hover | `#475569` | Hover state |
-| Primary text | `#f1f5f9` | Titles, names |
-| Secondary text | `#cbd5e1` | List items |
-| Muted text | `#64748b` | Labels, captions |
-| Dim text | `#475569` | Disabled, empty states |
-| Edge default | `#475569` | Connection lines |
-| Edge animated | `#60a5fa` | Active connections |
-| Blue accent | `#3b82f6` / `#60a5fa` | — |
-| Purple accent | `#8b5cf6` / `#a78bfa` | — |
-| Green accent | `#10b981` / `#34d399` | — |
-| Amber accent | `#f59e0b` / `#fbbf24` | — |
-| Red accent | `#ef4444` / `#f87171` | — |
-
-### Type badge CSS pattern
-
-```css
-.type-example {
-    background: rgba(59, 130, 246, 0.15);
-    color: #60a5fa;
-    border: 1px solid rgba(59, 130, 246, 0.3);
-}
-```
-
-Replace the RGB values with any accent color. The pattern is: 15% opacity background, full-brightness text, 30% opacity border.
-
-## Title and Legend
-
-### Title overlay
-
-```js
-h('div', { className: 'diagram-title' },
-    'Main Title',
-    h('div', { className: 'subtitle' }, 'Subtitle text'),
-)
-```
-
-### Legend overlay
-
-```js
-h('div', { className: 'legend' },
-    h('div', { className: 'legend-item' },
-        h('div', { className: 'legend-dot', style: { background: '#3b82f6' } }),
-        'Label',
-    ),
-    // ... more items
-)
-```
-
-## Common Node Designs
-
-### Card with sub-items
-
-For nodes that have a list of children (e.g., a flow with data actions):
-
-```js
-function CardWithList({ data }) {
-    return h('div', { className: 'node-card' },
-        h(Handle, { type: 'target', position: Position.Top, style: { background: '#475569', width: 8, height: 8 } }),
-        h('div', { className: `type-badge ${data.badgeClass}` }, data.badgeLabel),
-        h('div', { className: 'node-title' }, data.label),
-        data.items.length > 0
-            ? h('div', null,
-                h('div', { className: 'section-label' }, data.itemsLabel),
-                ...data.items.map((item, i) =>
-                    h('div', { key: i, className: 'list-item' }, item)
-                )
-            )
-            : h('div', { className: 'muted' }, `No ${data.itemsLabel.toLowerCase()}`),
-        h(Handle, { type: 'source', position: Position.Bottom, style: { background: '#475569', width: 8, height: 8 } }),
-    );
-}
-```
-
-### Simple labeled node
-
-For minimal nodes (state machine states, simple pipeline steps):
-
-```js
-function SimpleNode({ data }) {
-    return h('div', { className: 'node-card', style: { textAlign: 'center', minWidth: 120 } },
-        h(Handle, { type: 'target', position: Position.Top, style: { background: '#475569', width: 8, height: 8 } }),
-        h('div', { className: 'node-title', style: { marginBottom: 0 } }, data.label),
-        h(Handle, { type: 'source', position: Position.Bottom, style: { background: '#475569', width: 8, height: 8 } }),
-    );
-}
-```
-
-### Node with status indicator
-
-```js
-function StatusNode({ data }) {
-    const statusColors = { healthy: '#10b981', warning: '#f59e0b', error: '#ef4444' };
-    return h('div', { className: 'node-card' },
-        h(Handle, { type: 'target', position: Position.Top, style: { background: '#475569', width: 8, height: 8 } }),
-        h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-            h('div', { style: { width: 8, height: 8, borderRadius: '50%', background: statusColors[data.status] || '#475569' } }),
-            h('div', { className: 'node-title', style: { marginBottom: 0 } }, data.label),
-        ),
-        h(Handle, { type: 'source', position: Position.Bottom, style: { background: '#475569', width: 8, height: 8 } }),
-    );
-}
-```
+**Unresolved edges** (`UNRESOLVED_REFERENCE`, `UNRESOLVED_INITIAL_SEQUENCE`,
+`UNRESOLVED_INTENT_FANOUT`): do not draw a dangling arrow to nothing — Mermaid
+requires both endpoints to exist. Instead, add a small `errorTerminal`-styled
+node named after the warning (e.g. `Unresolved1[["? unresolved"]]`) as the
+edge's target, so the gap is visible rather than silently omitted.

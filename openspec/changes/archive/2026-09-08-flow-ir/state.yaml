@@ -1,0 +1,36 @@
+change: flow-ir
+created: 2026-09-04
+execution_mode: auto
+artifact_store: openspec
+delivery_strategy: auto-chain
+chain_strategy: stacked-to-main
+review_budget_lines: 400
+
+phases:
+  explore:
+    status: done
+    artifact: openspec/changes/flow-ir/exploration.md
+  proposal:
+    status: done
+    artifact: openspec/changes/flow-ir/proposal.md
+  design:
+    status: done
+    artifact: openspec/changes/flow-ir/design.md
+  specs:
+    status: done
+    artifact: openspec/changes/flow-ir/specs/flow-ir/spec.md
+  tasks:
+    status: done
+    artifact: openspec/changes/flow-ir/tasks.md
+  apply:
+    status: done
+    artifact: openspec/changes/flow-ir/apply-progress.md
+    note: >
+      Phases 1-3 complete across small commits. 41/41 tasks complete and passing.
+      Verified empirically against real Genesys Cloud flow.
+  verify:
+    status: done
+    artifact: openspec/changes/flow-ir/verify-report.md
+  archive:
+    status: done
+    artifact: openspec/changes/archive/2026-09-08-flow-ir/

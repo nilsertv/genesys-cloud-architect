@@ -6,6 +6,7 @@ import https from "node:https";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { resolveSessionAuth } from "./session-auth.ts";
 import {
     applyUpdateAndSave,
     type BaselineEnvelope,
@@ -285,6 +286,25 @@ interface SessionConfig {
     clientSecret: string;
 }
 
+interface UserTokenSessionConfig {
+    region: string;
+    accessToken: string;
+}
+
+/**
+ * Shared "why did the session end before starting" detail, used by both
+ * `startSession`'s and `startSessionWithUserToken`'s `onEnding` callback.
+ * Reads the same module-scope `httpErrors`/`traces` arrays populated by the
+ * HTTPS/TRACE interceptors above.
+ */
+function sessionStartFailureDetail(): string {
+    const lastHttp = httpErrors[httpErrors.length - 1];
+    const lastTrace = traces[traces.length - 1];
+    return lastHttp
+        ? `HTTP ${lastHttp.status}: ${typeof lastHttp.body === "object" ? (lastHttp.body as any).message || JSON.stringify(lastHttp.body) : lastHttp.body}`
+        : lastTrace || "Session ended before authentication completed";
+}
+
 function startSession(
     scripting: ArchitectScripting,
     { region, clientId, clientSecret }: SessionConfig,
@@ -304,15 +324,48 @@ function startSession(
             clientSecret,
             function onEnding() {
                 if (started) return;
-                const lastHttp = httpErrors[httpErrors.length - 1];
-                const lastTrace = traces[traces.length - 1];
-                const detail = lastHttp
-                    ? `HTTP ${lastHttp.status}: ${typeof lastHttp.body === "object" ? (lastHttp.body as any).message || JSON.stringify(lastHttp.body) : lastHttp.body}`
-                    : lastTrace ||
-                      "Session ended before authentication completed";
-                reject(new Error(`Session start failed — ${detail}`));
+                reject(
+                    new Error(
+                        `Session start failed — ${sessionStartFailureDetail()}`,
+                    ),
+                );
             },
             true,
+        );
+    });
+}
+
+/**
+ * Same as `startSession`, but authenticates with an already-obtained user
+ * access token (the opt-in PKCE login flow) instead of Client Credentials.
+ * `isClientCredentialsOAuthClient: false` — this is a user token.
+ */
+function startSessionWithUserToken(
+    scripting: ArchitectScripting,
+    { region, accessToken }: UserTokenSessionConfig,
+): Promise<ArchSession> {
+    const session = scripting.environment.archSession;
+    session.endTerminatesProcess = false;
+
+    return new Promise((resolve, reject) => {
+        let started = false;
+        session.startWithAuthToken(
+            region,
+            function onStarted() {
+                started = true;
+                resolve(session);
+            },
+            accessToken,
+            function onEnding() {
+                if (started) return;
+                reject(
+                    new Error(
+                        `Session start failed — ${sessionStartFailureDetail()}`,
+                    ),
+                );
+            },
+            false,
+            undefined,
         );
     });
 }
@@ -712,9 +765,9 @@ export async function confirmAndPublishFlow(
 
 // ~50k tokens @ ~4 chars/token — a conservative starting value, NOT yet
 // validated against real flow exports (see design.md's Open Questions).
-// Empirical verification against the "Calidda" org (tasks.md 1.6) is what
-// this constant should be tuned against, if a real flow ever gets close to
-// or exceeds it.
+// Empirical verification against a real org (tasks.md 1.6) is what this
+// constant should be tuned against, if a real flow ever gets close to or
+// exceeds it.
 const MAX_YAML_CHARS = 200_000;
 
 /**
@@ -876,17 +929,17 @@ async function main(): Promise<void> {
     // see the mode/flowFile correlation across the `if`, hence the assertion).
     const absoluteFlowPath = flowFile ? path.resolve(flowFile) : undefined;
 
-    const region = process.env.GENESYS_REGION;
-    const clientId = process.env.GENESYS_CLIENT_ID;
-    const clientSecret = process.env.GENESYS_CLIENT_SECRET;
-
-    if (!region || !clientId || !clientSecret) {
-        emit("result", {
-            success: false,
-            error: "Missing required environment variables: GENESYS_REGION, GENESYS_CLIENT_ID, GENESYS_CLIENT_SECRET",
-        });
+    const auth = resolveSessionAuth({
+        GENESYS_REGION: process.env.GENESYS_REGION,
+        GENESYS_CLIENT_ID: process.env.GENESYS_CLIENT_ID,
+        GENESYS_CLIENT_SECRET: process.env.GENESYS_CLIENT_SECRET,
+        GENESYS_USER_ACCESS_TOKEN: process.env.GENESYS_USER_ACCESS_TOKEN,
+    });
+    if (!auth.ok) {
+        emit("result", { success: false, error: auth.error });
         process.exit(1);
     }
+    const region = process.env.GENESYS_REGION as string;
 
     emit("log", "info", "Loading Architect Scripting SDK...");
     const scripting: ArchitectScripting = require("purecloud-flow-scripting-api-sdk-javascript");
@@ -904,11 +957,17 @@ async function main(): Promise<void> {
 
     emit("log", "info", `Starting SDK session (region: ${sdkRegion})...`);
 
-    const session = await startSession(scripting, {
-        region: sdkRegion,
-        clientId,
-        clientSecret,
-    });
+    const session =
+        auth.mode === "user-token"
+            ? await startSessionWithUserToken(scripting, {
+                  region: sdkRegion,
+                  accessToken: auth.accessToken,
+              })
+            : await startSession(scripting, {
+                  region: sdkRegion,
+                  clientId: auth.clientId,
+                  clientSecret: auth.clientSecret,
+              });
 
     if (mode === "update") {
         const exportsDir = values["exports-dir"];

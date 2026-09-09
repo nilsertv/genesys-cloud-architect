@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod/v3";
+import { buildRunnerEnv, type RunnerAuthConfig } from "./runner-env.ts";
 import type { ToolFactory } from "./types.ts";
 
 interface DeployRunnerLine {
@@ -13,15 +14,17 @@ interface DeployRunnerLine {
     flowName?: string;
     warnings?: string[];
     error?: string;
+    lockInfo?: {
+        lockedByUserName?: string;
+        lockedByUserEmail?: string;
+        dateLocked?: string;
+    };
 }
 
 const DEPLOY_TIMEOUT_MS = 120_000;
 
-export interface DeployFlowConfig {
+export interface DeployFlowConfig extends RunnerAuthConfig {
     readonly deployScriptPath: string;
-    readonly region: string;
-    readonly clientId: string;
-    readonly clientSecret: string;
 }
 
 export const deployFlow: ToolFactory<DeployFlowConfig> = (toolConfig) => ({
@@ -79,12 +82,7 @@ export const deployFlow: ToolFactory<DeployFlowConfig> = (toolConfig) => ({
             };
 
             const child = spawn("node", nodeArgs, {
-                env: {
-                    ...process.env,
-                    GENESYS_REGION: toolConfig.region,
-                    GENESYS_CLIENT_ID: toolConfig.clientId,
-                    GENESYS_CLIENT_SECRET: toolConfig.clientSecret,
-                },
+                env: buildRunnerEnv(toolConfig),
                 cwd: path.dirname(absolutePath),
                 stdio: ["ignore", "pipe", "pipe"],
             });
@@ -101,6 +99,18 @@ export const deployFlow: ToolFactory<DeployFlowConfig> = (toolConfig) => ({
                     ],
                 });
             }, DEPLOY_TIMEOUT_MS);
+
+            child.on("error", (err) => {
+                settle({
+                    isError: true,
+                    content: [
+                        {
+                            type: "text",
+                            text: `Failed to start deploy runner: ${err.message}`,
+                        },
+                    ],
+                });
+            });
 
             let stdoutBuf = "";
             child.stdout.on("data", (chunk: Buffer) => {
