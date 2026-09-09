@@ -452,3 +452,62 @@ describe("parseFlow — initialSequence resolution (tasks 2.15-2.16)", () => {
         }
     });
 });
+
+describe("parseFlow — DFS pass: order, backEdge, and reachability (tasks 2.17-2.18)", () => {
+    it("assigns pre-order numbering, sets backEdge on both cycle directions, and marks orphan unreachable", () => {
+        const res = parseFlow(loadFixture("cyclic-flow.json"));
+        assert.equal(res.ok, true);
+        if (res.ok) {
+            const startNode = res.ir.nodes.find(
+                (n) => n.id === "task-1::start",
+            );
+            const action1 = res.ir.nodes.find((n) => n.id === "action-1");
+            const action2 = res.ir.nodes.find((n) => n.id === "action-2");
+            const orphan = res.ir.nodes.find((n) => n.id === "orphan-action");
+
+            assert.ok(startNode && action1 && action2 && orphan);
+
+            // Pre-order discovery numbering
+            assert.equal(startNode.order, 0);
+            assert.equal(action1.order, 1);
+            assert.equal(action2.order, 2);
+
+            // Reachability
+            assert.equal(startNode.reachable, true);
+            assert.equal(action1.reachable, true);
+            assert.equal(action2.reachable, true);
+            assert.equal(orphan.reachable, false);
+
+            // Cycle-closing edge on action-2 -> action-1 (forward and backward)
+            const forwardBackEdge = action2.successors.find(
+                (e) => e.id === "action-1",
+            );
+            assert.equal(forwardBackEdge?.backEdge, true);
+
+            const reverseBackEdge = action1.predecessors.find(
+                (e) => e.id === "action-2",
+            );
+            assert.equal(reverseBackEdge?.backEdge, true);
+
+            // Normal non-back edges
+            const normalOutgoing = action1.successors.find(
+                (e) => e.id === "action-2",
+            );
+            assert.equal(normalOutgoing?.backEdge, false);
+
+            const normalIncoming = action1.predecessors.find(
+                (e) => e.id === "task-1::start",
+            );
+            assert.equal(normalIncoming?.backEdge, false);
+
+            // ir.nodes sorted ascending by order (with unreachable nodes at end)
+            for (let i = 0; i < res.ir.nodes.length - 1; i++) {
+                const a = res.ir.nodes[i];
+                const b = res.ir.nodes[i + 1];
+                if (a.reachable && b.reachable) {
+                    assert.ok(a.order <= b.order);
+                }
+            }
+        }
+    });
+});

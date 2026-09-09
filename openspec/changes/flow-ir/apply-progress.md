@@ -392,11 +392,21 @@ Tasks 2.15–2.16 implemented and green (76/76 tests passing):
 - Omission of `entryTaskId` when undeclared or unresolvable; assignment when resolved.
 - Synthetic fixture added: `warnings/unresolved-initial-sequence.json`.
 
+## PR2 continuation — tasks 2.17–2.18 (Chunk 4)
+
+Tasks 2.17–2.18 implemented and green (77/77 tests passing):
+- Iterative DFS pass with explicit stack, white/gray/black coloring.
+- Pre-order `order` assignment and `reachable: true` on first visit.
+- `backEdge: true` on both edge directions for cycle-closing edges.
+- Unreachable/orphaned actions keep `reachable: false` and `order: -1`.
+- `ir.nodes` sorted ascending by `order` (reachable first, unreachable at end).
+- Synthetic fixture added: `cyclic-flow.json`.
+
 ## Next
 
-1. Continue with PR2 Chunk 4 (tasks 2.17–2.18): iterative DFS pass (`order`, `reachable`, `backEdge`).
-2. Chunk 5 (tasks 2.19–2.21): `UNRESOLVED_CALL_TASK` reserved scenario + real fixture contract test.
-3. PR3: `raw-action-lookup.ts` + tool import swaps.
+1. Continue with PR2 Chunk 5 (tasks 2.19–2.21): `UNRESOLVED_CALL_TASK` reserved scenario + real fixture contract test.
+2. PR3: `raw-action-lookup.ts` + tool import swaps.
+
 
 
 

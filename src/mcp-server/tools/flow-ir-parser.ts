@@ -296,7 +296,7 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
             label: task.name,
             predecessors: [],
             successors: [],
-            order: 0,
+            order: -1,
             taskId: task.id,
             taskName: task.name,
             reachable: false,
@@ -339,7 +339,7 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
                     : undefined,
             predecessors: [],
             successors: [],
-            order: 0,
+            order: -1,
             taskId: occurrence.taskId,
             taskName: occurrence.taskName,
             reachable: false,
@@ -403,7 +403,7 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
             label,
             predecessors: [],
             successors: [],
-            order: 0,
+            order: -1,
             taskId,
             taskName,
             reachable: false,
@@ -635,6 +635,76 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
         }
     }
 
+    // 5. DFS pass: iterative traversal per root in flowSequenceItemList declaration order (step 5 / task 2.18).
+    type NodeColor = "gray" | "black";
+    const colors = new Map<string, NodeColor>();
+    let nextOrder = 0;
+
+    interface DfsFrame {
+        nodeId: string;
+        nextEdgeIndex: number;
+    }
+
+    for (const task of tasks) {
+        const rootId = `${task.id}::start`;
+        const rootNode = nodesById.get(rootId);
+        if (!rootNode || colors.has(rootId)) {
+            continue;
+        }
+
+        colors.set(rootId, "gray");
+        rootNode.order = nextOrder++;
+        rootNode.reachable = true;
+
+        const stack: DfsFrame[] = [{ nodeId: rootId, nextEdgeIndex: 0 }];
+
+        while (stack.length > 0) {
+            const frame = stack[stack.length - 1];
+            const currNode = nodesById.get(frame.nodeId);
+            if (!currNode) {
+                stack.pop();
+                continue;
+            }
+
+            if (frame.nextEdgeIndex < currNode.successors.length) {
+                const edge = currNode.successors[frame.nextEdgeIndex];
+                frame.nextEdgeIndex++;
+                const targetId = edge.id;
+                const targetColor = colors.get(targetId);
+
+                if (targetColor === "gray") {
+                    edge.backEdge = true;
+                    const targetNode = nodesById.get(targetId);
+                    if (targetNode) {
+                        const predEdge =
+                            targetNode.predecessors.find(
+                                (p) =>
+                                    p.id === currNode.id &&
+                                    p.label === edge.label,
+                            ) ??
+                            targetNode.predecessors.find(
+                                (p) => p.id === currNode.id,
+                            );
+                        if (predEdge) {
+                            predEdge.backEdge = true;
+                        }
+                    }
+                } else if (!targetColor) {
+                    const targetNode = nodesById.get(targetId);
+                    if (targetNode) {
+                        colors.set(targetId, "gray");
+                        targetNode.order = nextOrder++;
+                        targetNode.reachable = true;
+                        stack.push({ nodeId: targetId, nextEdgeIndex: 0 });
+                    }
+                }
+            } else {
+                colors.set(frame.nodeId, "black");
+                stack.pop();
+            }
+        }
+    }
+
     return {
         ok: true,
         ir: {
@@ -649,7 +719,12 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
             ...(entryTaskId !== undefined ? { entryTaskId } : {}),
             reachabilityIsComplete,
             tasks,
-            nodes: [...nodesById.values()],
+            nodes: [...nodesById.values()].sort((a, b) => {
+                if (a.reachable !== b.reachable) {
+                    return a.reachable ? -1 : 1;
+                }
+                return a.order - b.order;
+            }),
         },
         warnings,
     };

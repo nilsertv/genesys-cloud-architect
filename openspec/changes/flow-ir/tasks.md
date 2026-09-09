@@ -50,8 +50,8 @@ Chain strategy: stacked-to-main
 - [x] 2.14 GREEN — `TERMINAL_ACTION_TYPES` seeded allowlist + zero-outputs terminal/`UNKNOWN_ACTION_TYPE` step (design step 3e) + `TERMINAL_BRANCH_OUTCOMES` terminal-branch-output rule (design step 4).
 - [x] 2.15 RED — synthetic fixture `warnings/unresolved-initial-sequence.json`; test asserting `UNRESOLVED_INITIAL_SEQUENCE` and absent `ir.entryTaskId`.
 - [x] 2.16 GREEN — `initialSequence` resolution against task ids, entryTaskId assignment/omission.
-- [ ] 2.17 RED — synthetic minimal cyclic fixture; tests asserting DFS `order` pre-order numbering, `backEdge:true` on the cycle-closing edge (both directions), `reachable:false` for an orphaned action.
-- [ ] 2.18 GREEN — iterative DFS pass (design step 5): white/gray/black coloring, per-root traversal in `flowSequenceItemList` order, `order`/`reachable`/`backEdge` assignment.
+- [x] 2.17 RED — synthetic minimal cyclic fixture; tests asserting DFS `order` pre-order numbering, `backEdge:true` on the cycle-closing edge (both directions), `reachable:false` for an orphaned action.
+- [x] 2.18 GREEN — iterative DFS pass (design step 5): white/gray/black coloring, per-root traversal in `flowSequenceItemList` order, `order`/`reachable`/`backEdge` assignment.
 - [ ] 2.19 RED — test asserting `UNRESOLVED_CALL_TASK` is never emitted by any current fixture (spec: UNRESOLVED_CALL_TASK reserved scenario).
 - [ ] 2.20 Test `parseFlow(real-calidda-flow.json)`: assert `{ok:true}`, sane `ir.tasks`/`ir.nodes` shape, and trace at least one full path from an entry task-start to a terminal node using the real fixture's actual field names confirmed in task 1.3.
 - [ ] 2.21 **Empirical verification** — run `pnpm test src/mcp-server/tools/flow-ir-parser.test.ts` (or equivalent focused command); all cases green, including the real-fixture trace from 2.20.
