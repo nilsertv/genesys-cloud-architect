@@ -23,18 +23,14 @@ phases:
     status: done
     artifact: openspec/changes/flow-ir/tasks.md
   apply:
-    status: in_progress
+    status: done
     artifact: openspec/changes/flow-ir/apply-progress.md
     note: >
-      PR1 partially done: openspec/config.yaml testing-section fix done
-      (uncommitted). Real fixture capture (tasks 1.1-1.3, 1.5) blocked —
-      no Genesys credentials available in this environment. All commits
-      on this branch (port commit + PR1 commit) blocked by husky
-      pre-commit's `pnpm build` failing 401 on the private
-      @makingchatbots devDependency (expected until PR3 removes it). PR2
-      (flow-ir-parser.ts) and PR3 (raw-action-lookup.ts + wiring) not
-      started.
+      Phases 1-3 complete across small commits. 41/41 tasks complete and passing.
+      Verified empirically against real Genesys Cloud flow.
   verify:
-    status: pending
+    status: done
+    artifact: openspec/changes/flow-ir/verify-report.md
   archive:
-    status: pending
+    status: done
+    artifact: openspec/changes/archive/2026-09-08-flow-ir/
