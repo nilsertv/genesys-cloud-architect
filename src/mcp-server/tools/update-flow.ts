@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod/v3";
-import { isTokenExpired, type UserToken } from "../auth/user-token-store.ts";
+import { buildRunnerEnv, type RunnerAuthConfig } from "./runner-env.ts";
 import type { ToolFactory } from "./types.ts";
 
 interface FlowDiffEntry {
@@ -37,6 +37,14 @@ interface UpdateRunnerLine {
     requestedDiff?: FlowDiffResult;
     baselinePath?: string;
     unrequestedPaths?: string[];
+    lockInfo?: {
+        lockedByUserName?: string;
+        lockedByUserEmail?: string;
+        dateLocked?: string;
+    };
+    baselineExportPath?: string;
+    diff?: FlowDiffResult;
+    requiresConfirmation?: boolean;
 }
 
 const UPDATE_TIMEOUT_MS = 120_000;
@@ -92,12 +100,8 @@ function formatDiffSummary(diff: FlowDiffResult | undefined): string {
     return lines.join("\n");
 }
 
-export interface UpdateFlowConfig {
+export interface UpdateFlowConfig extends RunnerAuthConfig {
     readonly deployScriptPath: string;
-    readonly region: string;
-    readonly clientId: string;
-    readonly clientSecret: string;
-    readonly getUserToken: () => UserToken | undefined;
 }
 
 // NOTE: `inputSchema` MUST stay a flat `ZodRawShape` (plain `{ field: z... }`
@@ -255,12 +259,6 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
             nodeArgs.push("--confirm-publish");
         }
 
-        const userToken = toolConfig.getUserToken();
-        const userAccessToken =
-            userToken && !isTokenExpired(userToken)
-                ? userToken.accessToken
-                : undefined;
-
         return new Promise((resolve) => {
             const logs: string[] = [];
             let resultLine: UpdateRunnerLine | undefined;
@@ -277,13 +275,7 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
             };
 
             const child = spawn("node", nodeArgs, {
-                env: {
-                    ...process.env,
-                    GENESYS_REGION: toolConfig.region,
-                    GENESYS_CLIENT_ID: toolConfig.clientId,
-                    GENESYS_CLIENT_SECRET: toolConfig.clientSecret,
-                    GENESYS_USER_ACCESS_TOKEN: userAccessToken,
-                },
+                env: buildRunnerEnv(toolConfig),
                 cwd: path.dirname(absolutePath),
                 stdio: ["ignore", "pipe", "pipe"],
             });

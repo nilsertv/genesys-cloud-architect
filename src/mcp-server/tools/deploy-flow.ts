@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod/v3";
-import { isTokenExpired, type UserToken } from "../auth/user-token-store.ts";
+import { buildRunnerEnv, type RunnerAuthConfig } from "./runner-env.ts";
 import type { ToolFactory } from "./types.ts";
 
 interface DeployRunnerLine {
@@ -14,16 +14,17 @@ interface DeployRunnerLine {
     flowName?: string;
     warnings?: string[];
     error?: string;
+    lockInfo?: {
+        lockedByUserName?: string;
+        lockedByUserEmail?: string;
+        dateLocked?: string;
+    };
 }
 
 const DEPLOY_TIMEOUT_MS = 120_000;
 
-export interface DeployFlowConfig {
+export interface DeployFlowConfig extends RunnerAuthConfig {
     readonly deployScriptPath: string;
-    readonly region: string;
-    readonly clientId: string;
-    readonly clientSecret: string;
-    readonly getUserToken: () => UserToken | undefined;
 }
 
 export const deployFlow: ToolFactory<DeployFlowConfig> = (toolConfig) => ({
@@ -65,12 +66,6 @@ export const deployFlow: ToolFactory<DeployFlowConfig> = (toolConfig) => ({
             absolutePath,
         ];
 
-        const userToken = toolConfig.getUserToken();
-        const userAccessToken =
-            userToken && !isTokenExpired(userToken)
-                ? userToken.accessToken
-                : undefined;
-
         return new Promise((resolve) => {
             const logs: string[] = [];
             let resultLine: DeployRunnerLine | undefined;
@@ -87,13 +82,7 @@ export const deployFlow: ToolFactory<DeployFlowConfig> = (toolConfig) => ({
             };
 
             const child = spawn("node", nodeArgs, {
-                env: {
-                    ...process.env,
-                    GENESYS_REGION: toolConfig.region,
-                    GENESYS_CLIENT_ID: toolConfig.clientId,
-                    GENESYS_CLIENT_SECRET: toolConfig.clientSecret,
-                    GENESYS_USER_ACCESS_TOKEN: userAccessToken,
-                },
+                env: buildRunnerEnv(toolConfig),
                 cwd: path.dirname(absolutePath),
                 stdio: ["ignore", "pipe", "pipe"],
             });

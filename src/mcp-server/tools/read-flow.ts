@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { z } from "zod/v3";
-import { isTokenExpired, type UserToken } from "../auth/user-token-store.ts";
+import { buildRunnerEnv, type RunnerAuthConfig } from "./runner-env.ts";
 import type { ToolFactory } from "./types.ts";
 
 interface ReadRunnerLine {
@@ -40,12 +40,8 @@ const ERROR_KIND_MESSAGES: Record<
     unknown: undefined,
 };
 
-export interface ReadFlowConfig {
+export interface ReadFlowConfig extends RunnerAuthConfig {
     readonly deployScriptPath: string;
-    readonly region: string;
-    readonly clientId: string;
-    readonly clientSecret: string;
-    readonly getUserToken: () => UserToken | undefined;
 }
 
 // NOTE: `inputSchema` MUST stay a flat `ZodRawShape` (plain `{ field: z... }`
@@ -146,12 +142,6 @@ export const readFlow: ToolFactory<ReadFlowConfig> = (toolConfig) => ({
             nodeArgs.push("--flow-version", flowVersion);
         }
 
-        const userToken = toolConfig.getUserToken();
-        const userAccessToken =
-            userToken && !isTokenExpired(userToken)
-                ? userToken.accessToken
-                : undefined;
-
         return new Promise((resolve) => {
             const logs: string[] = [];
             let resultLine: ReadRunnerLine | undefined;
@@ -168,13 +158,7 @@ export const readFlow: ToolFactory<ReadFlowConfig> = (toolConfig) => ({
             };
 
             const child = spawn("node", nodeArgs, {
-                env: {
-                    ...process.env,
-                    GENESYS_REGION: toolConfig.region,
-                    GENESYS_CLIENT_ID: toolConfig.clientId,
-                    GENESYS_CLIENT_SECRET: toolConfig.clientSecret,
-                    GENESYS_USER_ACCESS_TOKEN: userAccessToken,
-                },
+                env: buildRunnerEnv(toolConfig),
                 stdio: ["ignore", "pipe", "pipe"],
             });
 
