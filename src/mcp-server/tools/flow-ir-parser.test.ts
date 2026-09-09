@@ -383,3 +383,72 @@ describe("parseFlow — UNKNOWN_ACTION_TYPE and terminal rules (steps 3e and 4)"
         }
     });
 });
+
+describe("parseFlow — initialSequence resolution (tasks 2.15-2.16)", () => {
+    it("emits UNRESOLVED_INITIAL_SEQUENCE and omits entryTaskId when initialSequence is unresolvable", () => {
+        const res = parseFlow(
+            loadFixture("warnings/unresolved-initial-sequence.json"),
+        );
+        assert.equal(res.ok, true);
+        if (res.ok) {
+            assert.equal(
+                res.warnings.find(
+                    (w) => w.code === "UNRESOLVED_INITIAL_SEQUENCE",
+                ) !== undefined,
+                true,
+            );
+            assert.equal("entryTaskId" in res.ir, false);
+        }
+    });
+
+    it("assigns entryTaskId when initialSequence resolves to a known task id", () => {
+        const res = parseFlow({
+            name: "ResolvedInitialSeq",
+            type: "inboundcall",
+            initialSequence: "task-1",
+            flowSequenceItemList: [
+                {
+                    id: "task-1",
+                    name: "Task One",
+                    actionList: [
+                        { id: "a-1", type: "DisconnectAction", name: "End" },
+                    ],
+                },
+            ],
+        });
+        assert.equal(res.ok, true);
+        if (res.ok) {
+            assert.equal(res.ir.entryTaskId, "task-1");
+            assert.equal(
+                res.warnings.some(
+                    (w) => w.code === "UNRESOLVED_INITIAL_SEQUENCE",
+                ),
+                false,
+            );
+        }
+    });
+
+    it("omits entryTaskId and emits no warning when initialSequence is not declared", () => {
+        const res = parseFlow({
+            name: "NoInitialSeq",
+            type: "inboundcall",
+            flowSequenceItemList: [
+                {
+                    id: "task-1",
+                    name: "Task One",
+                    actionList: [],
+                },
+            ],
+        });
+        assert.equal(res.ok, true);
+        if (res.ok) {
+            assert.equal("entryTaskId" in res.ir, false);
+            assert.equal(
+                res.warnings.some(
+                    (w) => w.code === "UNRESOLVED_INITIAL_SEQUENCE",
+                ),
+                false,
+            );
+        }
+    });
+});

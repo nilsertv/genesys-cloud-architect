@@ -158,6 +158,24 @@ function probeStartActionId(item: Record<string, unknown>): string | undefined {
     return undefined;
 }
 
+function probeInitialSequenceId(
+    configuration: Record<string, unknown>,
+): string | undefined {
+    const raw = configuration.initialSequence;
+    if (typeof raw === "string" && raw.trim() !== "") {
+        return raw.trim();
+    }
+    if (isRecord(raw)) {
+        if (typeof raw.id === "string" && raw.id.trim() !== "") {
+            return raw.id.trim();
+        }
+        if (typeof raw.name === "string" && raw.name.trim() !== "") {
+            return raw.name.trim();
+        }
+    }
+    return undefined;
+}
+
 function hasFlowSequenceItemList(
     configuration: unknown,
 ): configuration is Record<string, unknown> & {
@@ -593,6 +611,30 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
         }
     }
 
+    // Resolve initialSequence against known tasks (task 2.16).
+    let entryTaskId: string | undefined;
+    const hasDeclaredInitialSequence =
+        configuration.initialSequence !== undefined &&
+        configuration.initialSequence !== null &&
+        configuration.initialSequence !== "";
+
+    if (hasDeclaredInitialSequence) {
+        const probedId = probeInitialSequenceId(configuration);
+        const matchedTask = probedId
+            ? tasks.find((t) => t.id === probedId || t.name === probedId)
+            : undefined;
+        if (matchedTask && matchedTask.id !== "") {
+            entryTaskId = matchedTask.id;
+        } else {
+            warnings.push({
+                code: "UNRESOLVED_INITIAL_SEQUENCE",
+                message: `Declared initial sequence "${String(
+                    configuration.initialSequence,
+                )}" does not resolve to any known task.`,
+            });
+        }
+    }
+
     return {
         ok: true,
         ir: {
@@ -604,6 +646,7 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
                 typeof configuration.type === "string"
                     ? configuration.type
                     : "",
+            ...(entryTaskId !== undefined ? { entryTaskId } : {}),
             reachabilityIsComplete,
             tasks,
             nodes: [...nodesById.values()],

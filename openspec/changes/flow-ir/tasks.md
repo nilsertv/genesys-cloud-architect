@@ -48,8 +48,8 @@ Chain strategy: stacked-to-main
 - [x] 2.12 GREEN — generic outputs probe (`raw.paths ?? raw.outputs`, else `raw.nextAction ?? raw.nextActionId` fall-through), `branch-output` node creation (`<actionId>::<outputId>`), `DISABLED_BRANCH`/`DROPPED_EDGE` emission (design step 3d).
 - [x] 2.13 RED — synthetic fixture `warnings/unknown-action-type.json`; test asserting a generic node is still produced plus `UNKNOWN_ACTION_TYPE` (spec: UNKNOWN_ACTION_TYPE scenario).
 - [x] 2.14 GREEN — `TERMINAL_ACTION_TYPES` seeded allowlist + zero-outputs terminal/`UNKNOWN_ACTION_TYPE` step (design step 3e) + `TERMINAL_BRANCH_OUTCOMES` terminal-branch-output rule (design step 4).
-- [ ] 2.15 RED — synthetic fixture `warnings/unresolved-initial-sequence.json`; test asserting `UNRESOLVED_INITIAL_SEQUENCE` and absent `ir.entryTaskId`.
-- [ ] 2.16 GREEN — `initialSequence` resolution against task ids, entryTaskId assignment/omission.
+- [x] 2.15 RED — synthetic fixture `warnings/unresolved-initial-sequence.json`; test asserting `UNRESOLVED_INITIAL_SEQUENCE` and absent `ir.entryTaskId`.
+- [x] 2.16 GREEN — `initialSequence` resolution against task ids, entryTaskId assignment/omission.
 - [ ] 2.17 RED — synthetic minimal cyclic fixture; tests asserting DFS `order` pre-order numbering, `backEdge:true` on the cycle-closing edge (both directions), `reachable:false` for an orphaned action.
 - [ ] 2.18 GREEN — iterative DFS pass (design step 5): white/gray/black coloring, per-root traversal in `flowSequenceItemList` order, `order`/`reachable`/`backEdge` assignment.
 - [ ] 2.19 RED — test asserting `UNRESOLVED_CALL_TASK` is never emitted by any current fixture (spec: UNRESOLVED_CALL_TASK reserved scenario).
