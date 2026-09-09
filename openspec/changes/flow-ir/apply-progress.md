@@ -448,7 +448,14 @@ Tasks 3.5–3.9 implemented and green (91/91 tests passing):
 - Empirical verification against `real-calidda-flow.json` fixture passed.
 - All 91 unit tests passing under `pnpm test`.
 
+### PR3 continuation — tasks 3.10–3.11 (Chunk 3a)
+
+Tasks 3.10–3.11 completed:
+- `src/mcp-server/tools/flow-ir.ts`: swapped import from private package to `./flow-ir-parser.ts`.
+- `src/mcp-server/tools/flow-action.ts`: swapped import from private package to `./raw-action-lookup.ts`.
+- Formatted and organized imports cleanly per Biome rules.
+
 ## Next
 
-1. Phase 3 Chunk 3 (tasks 3.10–3.13): Swap imports in `flow-ir.ts`, `flow-action.ts`, `search-in-flow.ts`, and clean up any lingering references.
+1. Phase 3 Chunk 3b (tasks 3.12–3.13): Swap import in `search-in-flow.ts`, register tools in `src/mcp-server/index.ts`, and clean up any lingering references.
 2. Phase 3 Chunk 4 (tasks 3.14–3.15): Full verification (`pnpm run build`, `pnpm run lint`, `pnpm test`) and empirical MCP server verification.

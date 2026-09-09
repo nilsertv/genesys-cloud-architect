@@ -67,8 +67,8 @@ Chain strategy: stacked-to-main
 - [x] 3.7 RED — tests: `maxMatchesPerAction` truncation sets `truncated:true`; zero-matches on a well-formed configuration returns `hasMatches:false` distinct from an error on an unsearchable configuration (spec: maxMatchesPerAction truncation, Zero matches vs. unsearchable configuration).
 - [x] 3.8 GREEN — per-occurrence match cap + truncation flag; `hasMatches:false` vs. error-path distinction reusing `enumerateRawActions()`'s tolerant-empty behavior.
 - [x] 3.9 **Empirical verification** — run `pnpm test src/mcp-server/tools/raw-action-lookup.test.ts` (or equivalent); all cases green, including a real-fixture `findRawActions`/`searchRawActions` call.
-- [ ] 3.10 Swap import in `src/mcp-server/tools/flow-ir.ts` line 4: `"@makingchatbots/genesys-cloud-architect-diagram-lib"` → `"./flow-ir-parser.ts"`. No other line changes.
-- [ ] 3.11 Swap import in `src/mcp-server/tools/flow-action.ts` line 4: same package → `"./raw-action-lookup.ts"`. No other line changes.
+- [x] 3.10 Swap import in `src/mcp-server/tools/flow-ir.ts` line 4: `"@makingchatbots/genesys-cloud-architect-diagram-lib"` → `"./flow-ir-parser.ts"`. No other line changes.
+- [x] 3.11 Swap import in `src/mcp-server/tools/flow-action.ts` line 4: same package → `"./raw-action-lookup.ts"`. No other line changes.
 - [ ] 3.12 Swap import in `src/mcp-server/tools/search-in-flow.ts` line 4: same package → `"./raw-action-lookup.ts"`. No other line changes.
 - [ ] 3.13 Remove `@makingchatbots/genesys-cloud-architect-diagram-lib` from `package.json` `devDependencies`; remove the `@makingchatbots:registry=https://npm.pkg.github.com` line from `.npmrc` (confirmed only reference besides the 3 swapped imports and this line — `.claude-plugin/plugin.json`'s `makingchatbots.com` URL is unrelated and stays); run `pnpm install` to refresh the lockfile.
 - [ ] 3.14 Full verification: `pnpm run build`, `pnpm run typecheck`, `pnpm run lint`, `pnpm test` (all `*.test.ts` — the 3 pre-existing files plus the 2 new ones — must pass).
