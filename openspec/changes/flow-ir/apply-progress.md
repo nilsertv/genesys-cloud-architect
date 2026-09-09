@@ -463,6 +463,13 @@ Tasks 3.12–3.13 completed:
 - Confirmed `@makingchatbots/genesys-cloud-architect-diagram-lib` and `.npmrc` references are removed.
 - Full typecheck and build pass cleanly.
 
-## Next
+### PR3 continuation — tasks 3.14–3.15 (Chunk 4 — Phase 3 complete)
 
-1. Phase 3 Chunk 4 (tasks 3.14–3.15): Full verification (`pnpm run build`, `pnpm run lint`, `pnpm test`) and empirical MCP server verification.
+Tasks 3.14–3.15 completed and verified:
+- Full verification: `pnpm run build`, `pnpm run typecheck`, `pnpm run lint`, and `pnpm test` all passed cleanly (91/91 unit tests green, zero lint/format/type errors).
+- Empirical verification against live Genesys Cloud org for test flow `ZZZ-SDD-Test-DoNotUse-UpdateFlow` (`69cd3550-0848-4fd7-a5c7-4be615b20ced`):
+  - `flow_ir`: retrieved and parsed live flow into valid IR graph (`flowName`, `entryTaskId`, `task-start`, `action` nodes for `PlayAudioAction` and `DisconnectAction`, reachability, pre-order numbering, successors).
+  - `flow_action`: successfully resolved real action GUID `6363d512-0c91-4cde-acf0-531e868e0f56` and returned exact action configuration and task metadata; properly reported notFound for nonexistent GUIDs.
+  - `search_in_flow`: searched for `"Play Audio"` in live flow, returned exact match at leaf path `name` with excerpt.
+- All Phase 3 tasks (3.1–3.15) and all SDD proposal tasks are 100% complete.
+
