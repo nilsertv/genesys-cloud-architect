@@ -437,16 +437,18 @@ Tasks 3.1–3.4 implemented and green (84/84 tests passing):
 - Tolerant against malformed/null/absent configurations (never throws).
 - Unit tests added in `src/mcp-server/tools/raw-action-lookup.test.ts`.
 
+### PR3 continuation — tasks 3.5–3.9 (Chunk 2)
+
+Tasks 3.5–3.9 implemented and green (91/91 tests passing):
+- `searchRawActions(configuration, query, opts)` fully implemented in `src/mcp-server/tools/raw-action-lookup.ts`.
+- Validates `isSearchable(configuration)` and throws when `flowSequenceItemList` is absent or invalid (distinguishing unsearchable from zero matches).
+- Recursive string-leaf walk (`walkLeaves`) building unescaped `parent.key`/`parent.index` dot paths without matching object keys.
+- Literal substring and regex pattern matching honoring `caseSensitive` toggle and regex flags.
+- `maxMatchesPerAction` truncation per action occurrence, setting `truncated: true` when exceeded.
+- Empirical verification against `real-calidda-flow.json` fixture passed.
+- All 91 unit tests passing under `pnpm test`.
+
 ## Next
 
-1. Phase 3 Chunk 2 (tasks 3.5–3.9): `searchRawActions` (literal, regex, case-sensitivity, maxMatchesPerAction truncation, hasMatches:false vs unsearchable).
-2. Phase 3 Chunk 3 (tasks 3.10–3.13): Swap imports in `flow-ir.ts`, `flow-action.ts`, `search-in-flow.ts`.
-3. Phase 3 Chunk 4 (tasks 3.14–3.15): Full test verification and end-to-end tool check.
-
-
-
-
-
-
-
-
+1. Phase 3 Chunk 3 (tasks 3.10–3.13): Swap imports in `flow-ir.ts`, `flow-action.ts`, `search-in-flow.ts`, and clean up any lingering references.
+2. Phase 3 Chunk 4 (tasks 3.14–3.15): Full verification (`pnpm run build`, `pnpm run lint`, `pnpm test`) and empirical MCP server verification.

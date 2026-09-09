@@ -62,11 +62,11 @@ Chain strategy: stacked-to-main
 - [x] 3.2 GREEN — `raw-action-lookup.ts`: `findRawActions(configuration, actionIds)` built on `enumerateRawActions()` imported from `flow-ir-parser.ts`.
 - [x] 3.3 RED — test: a `<actionId>::<outputId>` suffixed id resolves to the underlying action (spec: Synthetic suffixed id resolved); a batch mixing found/not-found/suffixed ids accounts for every distinct GUID exactly once (spec: Mixed batch).
 - [x] 3.4 GREEN — suffix-stripping in `findRawActions` per design (`flow-action.ts`'s `planLookups` already strips before calling; confirm `findRawActions` itself also tolerates a suffixed id defensively per spec).
-- [ ] 3.5 RED — `searchRawActions` tests: literal substring match, regex match, case sensitivity (both `true`/`false`), object keys never match (spec: searchRawActions Content Search scenarios).
-- [ ] 3.6 GREEN — `searchRawActions(configuration, query, opts)`: string-leaf-only recursive walk, naive unescaped `parent.key`/`parent.index` path building, literal/regex/case-fold matching.
-- [ ] 3.7 RED — tests: `maxMatchesPerAction` truncation sets `truncated:true`; zero-matches on a well-formed configuration returns `hasMatches:false` distinct from an error on an unsearchable configuration (spec: maxMatchesPerAction truncation, Zero matches vs. unsearchable configuration).
-- [ ] 3.8 GREEN — per-occurrence match cap + truncation flag; `hasMatches:false` vs. error-path distinction reusing `enumerateRawActions()`'s tolerant-empty behavior.
-- [ ] 3.9 **Empirical verification** — run `pnpm test src/mcp-server/tools/raw-action-lookup.test.ts` (or equivalent); all cases green, including a real-fixture `findRawActions`/`searchRawActions` call.
+- [x] 3.5 RED — `searchRawActions` tests: literal substring match, regex match, case sensitivity (both `true`/`false`), object keys never match (spec: searchRawActions Content Search scenarios).
+- [x] 3.6 GREEN — `searchRawActions(configuration, query, opts)`: string-leaf-only recursive walk, naive unescaped `parent.key`/`parent.index` path building, literal/regex/case-fold matching.
+- [x] 3.7 RED — tests: `maxMatchesPerAction` truncation sets `truncated:true`; zero-matches on a well-formed configuration returns `hasMatches:false` distinct from an error on an unsearchable configuration (spec: maxMatchesPerAction truncation, Zero matches vs. unsearchable configuration).
+- [x] 3.8 GREEN — per-occurrence match cap + truncation flag; `hasMatches:false` vs. error-path distinction reusing `enumerateRawActions()`'s tolerant-empty behavior.
+- [x] 3.9 **Empirical verification** — run `pnpm test src/mcp-server/tools/raw-action-lookup.test.ts` (or equivalent); all cases green, including a real-fixture `findRawActions`/`searchRawActions` call.
 - [ ] 3.10 Swap import in `src/mcp-server/tools/flow-ir.ts` line 4: `"@makingchatbots/genesys-cloud-architect-diagram-lib"` → `"./flow-ir-parser.ts"`. No other line changes.
 - [ ] 3.11 Swap import in `src/mcp-server/tools/flow-action.ts` line 4: same package → `"./raw-action-lookup.ts"`. No other line changes.
 - [ ] 3.12 Swap import in `src/mcp-server/tools/search-in-flow.ts` line 4: same package → `"./raw-action-lookup.ts"`. No other line changes.

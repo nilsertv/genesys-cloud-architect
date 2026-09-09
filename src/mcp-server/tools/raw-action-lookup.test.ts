@@ -2,11 +2,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { findRawActions } from "./raw-action-lookup.ts";
+import { fileURLToPath } from "node:url";
+import { findRawActions, searchRawActions } from "./raw-action-lookup.ts";
 
-function _loadFixture(relPath: string): unknown {
-    const full = path.join(__dirname, "__fixtures__", relPath);
-    return JSON.parse(fs.readFileSync(full, "utf8"));
+const fixturesDir = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "__fixtures__",
+);
+
+function loadFixture(relPath: string): unknown {
+    return JSON.parse(fs.readFileSync(path.join(fixturesDir, relPath), "utf8"));
 }
 
 describe("findRawActions — lookup, notFound, and synthetic suffix handling (tasks 3.1-3.4)", () => {
@@ -91,5 +96,147 @@ describe("findRawActions — lookup, notFound, and synthetic suffix handling (ta
         assert.equal(res.found.length, 1);
         assert.equal(res.found[0].actionId, "act-1");
         assert.deepEqual(res.notFound, ["missing-1"]);
+    });
+});
+
+describe("searchRawActions — content search, regex, case-sensitivity, truncation, and unsearchable config (tasks 3.5-3.9)", () => {
+    const searchFlow = {
+        name: "SearchTestFlow",
+        type: "inboundcall",
+        flowSequenceItemList: [
+            {
+                id: "task-1",
+                name: "Billing Task",
+                actionList: [
+                    {
+                        id: "act-prompt",
+                        type: "PlayAudioAction",
+                        name: "Welcome Audio",
+                        audio: {
+                            text: "Please enter your Account Number now.",
+                        },
+                        tags: ["billing", "vip", "primary"],
+                    },
+                    {
+                        id: "act-disconnect",
+                        type: "DisconnectAction",
+                        name: "Goodbye",
+                    },
+                ],
+            },
+        ],
+    };
+
+    it("matches literal substring in string leaf values", () => {
+        const res = searchRawActions(searchFlow, "Account Number", {
+            caseSensitive: false,
+            maxMatchesPerAction: 10,
+        });
+        assert.equal(res.hasMatches, true);
+        assert.equal(res.matches.length, 1);
+        const match = res.matches[0];
+        assert.equal(match.actionId, "act-prompt");
+        assert.equal(match.name, "Welcome Audio");
+        assert.equal(match.actionType, "PlayAudioAction");
+        assert.equal(match.matchedPaths.length, 1);
+        assert.equal(match.matchedPaths[0].path, "audio.text");
+        assert.equal(
+            match.matchedPaths[0].value,
+            "Please enter your Account Number now.",
+        );
+    });
+
+    it("matches regex pattern across string leaf values", () => {
+        const res = searchRawActions(searchFlow, /enter your [a-z]+ number/i, {
+            caseSensitive: false,
+            maxMatchesPerAction: 10,
+        });
+        assert.equal(res.hasMatches, true);
+        assert.equal(res.matches.length, 1);
+        assert.equal(res.matches[0].actionId, "act-prompt");
+    });
+
+    it("honors case sensitivity: sensitive miss vs insensitive hit", () => {
+        const sensitiveRes = searchRawActions(searchFlow, "account number", {
+            caseSensitive: true,
+            maxMatchesPerAction: 10,
+        });
+        assert.equal(sensitiveRes.hasMatches, false);
+        assert.deepEqual(sensitiveRes.matches, []);
+
+        const insensitiveRes = searchRawActions(searchFlow, "account number", {
+            caseSensitive: false,
+            maxMatchesPerAction: 10,
+        });
+        assert.equal(insensitiveRes.hasMatches, true);
+        assert.equal(insensitiveRes.matches.length, 1);
+    });
+
+    it("never matches object key names, only leaf string values", () => {
+        const res = searchRawActions(searchFlow, "actionList", {
+            caseSensitive: false,
+            maxMatchesPerAction: 10,
+        });
+        assert.equal(res.hasMatches, false);
+        assert.deepEqual(res.matches, []);
+    });
+
+    it("caps matched paths at maxMatchesPerAction and marks truncated: true", () => {
+        // "act-prompt" matches "i" in name "Welcome Audio" (no 'i'), audio.text ('in' in enter? no, in Please/Account/Number/now? no 'i'),
+        // tags[0] ("billing" - 2 'i's), tags[1] ("vip" - 1 'i'), tags[2] ("primary" - 1 'i') -> 3 matching paths
+        const res = searchRawActions(searchFlow, "i", {
+            caseSensitive: false,
+            maxMatchesPerAction: 2,
+        });
+        assert.equal(res.hasMatches, true);
+        const actPrompt = res.matches.find((m) => m.actionId === "act-prompt");
+        assert.ok(actPrompt);
+        assert.equal(actPrompt.matchedPaths.length, 2);
+        assert.equal(actPrompt.truncated, true);
+    });
+
+    it("distinguishes zero matches (hasMatches: false) from unsearchable configuration (throws)", () => {
+        const zeroMatch = searchRawActions(
+            searchFlow,
+            "nonexistent-query-string",
+            {
+                caseSensitive: false,
+                maxMatchesPerAction: 10,
+            },
+        );
+        assert.equal(zeroMatch.hasMatches, false);
+        assert.deepEqual(zeroMatch.matches, []);
+
+        assert.throws(() => {
+            searchRawActions(null, "query", {
+                caseSensitive: false,
+                maxMatchesPerAction: 10,
+            });
+        }, /flowSequenceItemList/);
+
+        assert.throws(() => {
+            searchRawActions({}, "query", {
+                caseSensitive: false,
+                maxMatchesPerAction: 10,
+            });
+        }, /flowSequenceItemList/);
+    });
+
+    it("runs empirical verification against real-calidda-flow.json fixture (task 3.9)", () => {
+        const realFixture = loadFixture("real-calidda-flow.json");
+
+        const lookupRes = findRawActions(realFixture, [
+            "any-guid-1",
+            "any-guid-2",
+        ]);
+        assert.deepEqual(lookupRes.found, []);
+        assert.deepEqual(lookupRes.notFound, ["any-guid-1", "any-guid-2"]);
+
+        const searchRes = searchRawActions(realFixture, "any-search-term", {
+            caseSensitive: false,
+            maxMatchesPerAction: 10,
+        });
+        assert.equal(searchRes.hasMatches, false);
+        assert.deepEqual(searchRes.matches, []);
     });
 });
