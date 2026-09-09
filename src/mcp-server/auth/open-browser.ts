@@ -1,31 +1,29 @@
 // Opens a URL in the user's default browser via a hand-rolled per-platform
-// shell command — deliberately not the `open` npm package, per the
+// binary invocation — deliberately not the `open` npm package, per the
 // no-new-dependency constraint on this feature.
 
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 
 /**
- * Builds the shell command to open `url` in the default browser. Quotes the
- * URL for the target platform's shell and escapes any embedded double quote
- * so the URL can never break out of that quoting.
+ * Resolves the binary + argv to open `url` in the default browser.
+ * Uses `execFile` (no shell), so the URL is passed to the OS as a single
+ * argv entry — no quoting/escaping needed, and no shell-injection surface
+ * regardless of what characters `url` contains.
  */
-export function buildOpenCommand(
+export function buildOpenInvocation(
     url: string,
     platform: NodeJS.Platform = process.platform,
-): string {
+): { command: string; args: string[] } {
     if (platform === "win32") {
-        // cmd.exe: a literal `"` inside a quoted argument is escaped by
-        // doubling it. The empty `""` first argument to `start` is the
-        // window title — required so a URL isn't mistaken for one.
-        return `start "" "${url.replace(/"/g, '""')}"`;
+        // `start` is a cmd.exe built-in, not a standalone binary — invoke it
+        // via `cmd /c`. The empty "" arg is `start`'s window-title
+        // parameter, required so the URL isn't mistaken for one.
+        return { command: "cmd", args: ["/c", "start", "", url] };
     }
-
-    // POSIX shells (`/bin/sh`, used by child_process.exec): escape `"` with
-    // a backslash inside a double-quoted string.
-    const escaped = url.replace(/"/g, '\\"');
-    return platform === "darwin"
-        ? `open "${escaped}"`
-        : `xdg-open "${escaped}"`;
+    return {
+        command: platform === "darwin" ? "open" : "xdg-open",
+        args: [url],
+    };
 }
 
 /**
@@ -35,7 +33,8 @@ export function buildOpenCommand(
  */
 export function openBrowser(url: string): Promise<void> {
     return new Promise((resolve) => {
-        exec(buildOpenCommand(url), (error) => {
+        const { command, args } = buildOpenInvocation(url);
+        execFile(command, args, (error) => {
             if (error) {
                 console.warn(
                     `Could not open browser automatically (${error.message}). Open this URL manually:\n${url}`,
