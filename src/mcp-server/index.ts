@@ -6,6 +6,7 @@ import platformClient from "purecloud-platform-client-v2";
 import { z } from "zod/v3";
 import { deployFlow } from "./tools/deploy-flow.ts";
 import { findFlow } from "./tools/find-flow.ts";
+import { findQueue } from "./tools/find-queue.ts";
 import { flowAction } from "./tools/flow-action.ts";
 import { flowDependencies } from "./tools/flow-dependencies.ts";
 import { flowIr } from "./tools/flow-ir.ts";
@@ -55,9 +56,10 @@ const server = new McpServer({
     version: process.env.npm_package_version ?? "0.0.0",
 });
 
-const flowDependenciesTool = flowDependencies({
-    architectApi: new platformClient.ArchitectApi(),
-});
+const architectApi = new platformClient.ArchitectApi();
+const routingApi = new platformClient.RoutingApi();
+
+const flowDependenciesTool = flowDependencies({ architectApi });
 server.registerTool(
     "flow_dependencies",
     flowDependenciesTool.config,
@@ -96,10 +98,11 @@ const readFlowTool = readFlow({
 });
 server.registerTool("read_flow", readFlowTool.config, readFlowTool.handler);
 
-const findFlowTool = findFlow({
-    architectApi: new platformClient.ArchitectApi(),
-});
+const findFlowTool = findFlow({ architectApi });
 server.registerTool("find_flow", findFlowTool.config, findFlowTool.handler);
+
+const findQueueTool = findQueue({ routingApi });
+server.registerTool("find_queue", findQueueTool.config, findQueueTool.handler);
 
 const testBotFlowTool = testBotFlow({
     textbotsApi: new platformClient.TextbotsApi(),
@@ -110,23 +113,17 @@ server.registerTool(
     testBotFlowTool.handler,
 );
 
-const flowIrTool = flowIr({
-    architectApi: new platformClient.ArchitectApi(),
-});
+const flowIrTool = flowIr({ architectApi });
 server.registerTool("flow_ir", flowIrTool.config, flowIrTool.handler);
 
-const flowActionTool = flowAction({
-    architectApi: new platformClient.ArchitectApi(),
-});
+const flowActionTool = flowAction({ architectApi });
 server.registerTool(
     "flow_action",
     flowActionTool.config,
     flowActionTool.handler,
 );
 
-const searchInFlowTool = searchInFlow({
-    architectApi: new platformClient.ArchitectApi(),
-});
+const searchInFlowTool = searchInFlow({ architectApi });
 server.registerTool(
     "search_in_flow",
     searchInFlowTool.config,
