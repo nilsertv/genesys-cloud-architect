@@ -511,3 +511,107 @@ describe("parseFlow — DFS pass: order, backEdge, and reachability (tasks 2.17-
         }
     });
 });
+
+describe("parseFlow — UNRESOLVED_CALL_TASK reserved and real-fixture trace (tasks 2.19-2.20)", () => {
+    it("never emits UNRESOLVED_CALL_TASK warning across all fixtures (reserved scenario)", () => {
+        const fixtureNames = [
+            "real-calidda-flow.json",
+            "cyclic-flow.json",
+            "menu-choice-task.json",
+            "warnings/disabled-branch.json",
+            "warnings/dropped-edge.json",
+            "warnings/missing-duplicate-action-id.json",
+            "warnings/unknown-action-type.json",
+            "warnings/unresolved-initial-sequence.json",
+            "warnings/unresolved-intent-fanout.json",
+            "warnings/unresolved-reference.json",
+        ];
+        for (const name of fixtureNames) {
+            const res = parseFlow(loadFixture(name));
+            if (res.ok) {
+                assert.equal(
+                    res.warnings.some((w) => w.code === "UNRESOLVED_CALL_TASK"),
+                    false,
+                    `Expected no UNRESOLVED_CALL_TASK in fixture ${name}`,
+                );
+            }
+        }
+    });
+
+    it("parses real-calidda-flow.json conforming to well-formed empty contract", () => {
+        const res = parseFlow(loadFixture("real-calidda-flow.json"));
+        assert.equal(res.ok, true);
+        if (res.ok) {
+            assert.equal(res.ir.flowName, "ZZZ-SDD-Test-DoNotUse-UpdateFlow");
+            assert.equal(res.ir.flowType, "inboundcall");
+            assert.equal(res.ir.reachabilityIsComplete, true);
+            assert.deepEqual(res.ir.tasks, []);
+            assert.deepEqual(res.ir.nodes, []);
+            assert.equal("entryTaskId" in res.ir, false);
+            assert.deepEqual(res.warnings, []);
+        }
+    });
+
+    it("traces a full path from entry task-start to terminal node in a wired flow", () => {
+        const res = parseFlow({
+            name: "CompletePathFlow",
+            type: "inboundcall",
+            initialSequence: "entry-task",
+            flowSequenceItemList: [
+                {
+                    id: "entry-task",
+                    name: "Entry Task",
+                    startAction: "step-1",
+                    actionList: [
+                        {
+                            id: "step-1",
+                            type: "PlayAudioAction",
+                            name: "Welcome",
+                            paths: [
+                                {
+                                    outputId: "out-audio",
+                                    name: "Success",
+                                    nextAction: "step-2",
+                                },
+                            ],
+                        },
+                        {
+                            id: "step-2",
+                            type: "DisconnectAction",
+                            name: "Disconnect",
+                        },
+                    ],
+                },
+            ],
+        });
+        assert.equal(res.ok, true);
+        if (res.ok) {
+            assert.equal(res.ir.entryTaskId, "entry-task");
+            const startNode = res.ir.nodes.find(
+                (n) => n.id === "entry-task::start",
+            );
+            assert.ok(startNode);
+            assert.equal(startNode.successors.length, 1);
+
+            const step1Node = res.ir.nodes.find(
+                (n) => n.id === startNode.successors[0].id,
+            );
+            assert.ok(step1Node);
+            assert.equal(step1Node.id, "step-1");
+
+            const branchOutput = res.ir.nodes.find(
+                (n) => n.id === step1Node.successors[0].id,
+            );
+            assert.ok(branchOutput);
+            assert.equal(branchOutput.id, "step-1::out-audio");
+
+            const terminalNode = res.ir.nodes.find(
+                (n) => n.id === branchOutput.successors[0].id,
+            );
+            assert.ok(terminalNode);
+            assert.equal(terminalNode.id, "step-2");
+            assert.equal(terminalNode.terminal, true);
+            assert.equal(terminalNode.successors.length, 0);
+        }
+    });
+});

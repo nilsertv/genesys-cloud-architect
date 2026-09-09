@@ -402,10 +402,18 @@ Tasks 2.17–2.18 implemented and green (77/77 tests passing):
 - `ir.nodes` sorted ascending by `order` (reachable first, unreachable at end).
 - Synthetic fixture added: `cyclic-flow.json`.
 
+## PR2 continuation — tasks 2.19–2.21 (Chunk 5 — Phase 2 complete)
+
+Tasks 2.19–2.21 implemented and green (80/80 tests passing):
+- `UNRESOLVED_CALL_TASK` reserved code assertion across all 10 fixtures (never emitted).
+- `parseFlow(real-calidda-flow.json)` verified: conforms to well-formed empty contract.
+- End-to-end trace from entry `task-start` node through branch-output to terminal node verified.
+- All 80 unit tests passing under `pnpm test`. Phase 2 is fully complete.
+
 ## Next
 
-1. Continue with PR2 Chunk 5 (tasks 2.19–2.21): `UNRESOLVED_CALL_TASK` reserved scenario + real fixture contract test.
-2. PR3: `raw-action-lookup.ts` + tool import swaps.
+1. Phase 3 (PR3, tasks 3.1–3.15): `raw-action-lookup.ts` (`findRawActions`, `searchRawActions`) + tool import swaps.
+
 
 
 
