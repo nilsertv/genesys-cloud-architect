@@ -26,7 +26,7 @@ import { updateFlow } from "./tools/update-flow.ts";
 // directly. Looks for .env in CLAUDE_PROJECT_DIR (Claude Code) or process.cwd()
 // (Antigravity agy, Cursor, VS Code, standalone).
 const projectDir = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
-if (!process.env.GENESYS_CLIENT_ID) {
+if (!process.env.GENESYS_CLIENT_ID && !process.env.GENESYS_PKCE_CLIENT_ID) {
     // override: true — pre-populated empty env vars don't block loading values from .env
     loadDotenv({
         path: path.join(projectDir, ".env"),
@@ -34,11 +34,11 @@ if (!process.env.GENESYS_CLIENT_ID) {
     });
 }
 
-const envResults = z
+const envSchema = z
     .object({
         GENESYS_REGION: z.string().min(1),
-        GENESYS_CLIENT_ID: z.string().min(1),
-        GENESYS_CLIENT_SECRET: z.string().min(1),
+        GENESYS_CLIENT_ID: z.string().min(1).optional(),
+        GENESYS_CLIENT_SECRET: z.string().min(1).optional(),
         GENESYS_PKCE_CLIENT_ID: z.string().min(1).optional(),
         GENESYS_PKCE_CLIENT_SECRET: z.string().min(1).optional(),
         DEPLOY_SCRIPT_PATH: z.preprocess(
@@ -54,11 +54,23 @@ const envResults = z
             .default("FALSE")
             .transform((v) => v === "TRUE"),
     })
-    .safeParse(process.env);
+    .refine(
+        (data) =>
+            (data.GENESYS_CLIENT_ID && data.GENESYS_CLIENT_SECRET) ||
+            data.GENESYS_PKCE_CLIENT_ID,
+        {
+            message:
+                "Either (GENESYS_CLIENT_ID and GENESYS_CLIENT_SECRET) or GENESYS_PKCE_CLIENT_ID must be provided.",
+        },
+    );
+
+const envResults = envSchema.safeParse(process.env);
 
 if (!envResults.success) {
-    const missing = envResults.error.issues.map((i) => i.path[0]).join("\n ");
-    console.error(`Missing required environment variables:\n ${missing}`);
+    const missing = envResults.error.issues
+        .map((i) => i.message || String(i.path[0]))
+        .join("\n ");
+    console.error(`Invalid or missing environment configuration:\n ${missing}`);
     process.exit(1);
 }
 
@@ -211,9 +223,7 @@ void (async () => {
         } else {
             console.warn(
                 "Stored user token in .genesys-user-token.json is stale or " +
-                    "for a different region — falling back to Client " +
-                    "Credentials for this session. Run the login_user tool " +
-                    "to refresh it.",
+                    "for a different region. Run the login_user tool to refresh it.",
             );
         }
     }
@@ -228,10 +238,15 @@ void (async () => {
         const userToken = getUserToken();
         if (userToken) {
             client.setAccessToken(userToken.accessToken);
-        } else {
+        } else if (envVars.GENESYS_CLIENT_ID && envVars.GENESYS_CLIENT_SECRET) {
             await client.loginClientCredentialsGrant(
                 envVars.GENESYS_CLIENT_ID,
                 envVars.GENESYS_CLIENT_SECRET,
+            );
+        } else {
+            console.warn(
+                "No valid user token found and no Client Credentials provided. " +
+                    "The server is ready; run the login_user tool to authenticate.",
             );
         }
     }

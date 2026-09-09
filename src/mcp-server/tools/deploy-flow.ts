@@ -2,7 +2,11 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod/v3";
-import { buildRunnerEnv, type RunnerAuthConfig } from "./runner-env.ts";
+import {
+    buildRunnerEnv,
+    checkRunnerAuth,
+    type RunnerAuthConfig,
+} from "./runner-env.ts";
 import type { ToolFactory } from "./types.ts";
 
 interface DeployRunnerLine {
@@ -47,6 +51,14 @@ export const deployFlow: ToolFactory<DeployFlowConfig> = (toolConfig) => ({
         },
     },
     handler: async ({ flowFile }) => {
+        const auth = checkRunnerAuth(toolConfig);
+        if (!auth.ok) {
+            return {
+                isError: true,
+                content: [{ type: "text", text: auth.error }],
+            };
+        }
+
         const absolutePath = path.resolve(flowFile as string);
         if (!fs.existsSync(absolutePath)) {
             return {

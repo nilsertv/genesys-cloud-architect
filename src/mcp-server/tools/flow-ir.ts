@@ -28,8 +28,8 @@ function findTask(
 
 export interface ToolConfig {
     architectApi: ArchitectApi;
-    clientId: string;
-    clientSecret: string;
+    clientId?: string;
+    clientSecret?: string;
 }
 
 const inputSchema = {

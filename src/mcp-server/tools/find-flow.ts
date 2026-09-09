@@ -42,8 +42,8 @@ function toFlowSummary(flow: platformClient.Models.Flow): FlowSummary {
 
 export interface ToolConfig {
     architectApi: ArchitectApi;
-    clientId: string;
-    clientSecret: string;
+    clientId?: string;
+    clientSecret?: string;
 }
 
 const inputSchema = {

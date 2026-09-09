@@ -60,8 +60,8 @@ async function drainNoOps(
 
 export interface TestBotFlowConfig {
     textbotsApi: TextbotsApi;
-    clientId: string;
-    clientSecret: string;
+    clientId?: string;
+    clientSecret?: string;
 }
 
 export const testBotFlow: ToolFactory<TestBotFlowConfig> = ({

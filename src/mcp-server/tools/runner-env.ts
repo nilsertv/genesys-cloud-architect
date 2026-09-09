@@ -2,9 +2,39 @@ import { isTokenExpired, type UserToken } from "../auth/user-token-store.ts";
 
 export interface RunnerAuthConfig {
     readonly region: string;
-    readonly clientId: string;
-    readonly clientSecret: string;
+    readonly clientId?: string;
+    readonly clientSecret?: string;
     readonly getUserToken: () => UserToken | undefined;
+}
+
+/**
+ * Validates that either a valid user token exists, or Client Credentials are provided.
+ */
+export function checkRunnerAuth(
+    config: RunnerAuthConfig,
+): { ok: true } | { ok: false; error: string } {
+    const userToken = config.getUserToken();
+    if (userToken) {
+        if (isTokenExpired(userToken)) {
+            if (config.clientId && config.clientSecret) {
+                return { ok: true };
+            }
+            return {
+                ok: false,
+                error: "User session expired. Please run the login_user tool to log in again.",
+            };
+        }
+        return { ok: true };
+    }
+
+    if (config.clientId && config.clientSecret) {
+        return { ok: true };
+    }
+
+    return {
+        ok: false,
+        error: "Not authenticated. Please run the login_user tool first to authenticate via browser.",
+    };
 }
 
 /**
@@ -28,8 +58,10 @@ export function buildRunnerEnv(
     return {
         ...baseEnv,
         GENESYS_REGION: config.region,
-        GENESYS_CLIENT_ID: config.clientId,
-        GENESYS_CLIENT_SECRET: config.clientSecret,
+        ...(config.clientId ? { GENESYS_CLIENT_ID: config.clientId } : {}),
+        ...(config.clientSecret
+            ? { GENESYS_CLIENT_SECRET: config.clientSecret }
+            : {}),
         GENESYS_USER_ACCESS_TOKEN: userAccessToken,
     };
 }

@@ -83,4 +83,38 @@ describe("ensureApiClientAuth", () => {
         ]);
         assert.equal(setAccessToken.mock.calls.length, 0);
     });
+
+    it("throws when neither user token nor client credentials are provided", async () => {
+        setUserToken(undefined);
+        await assert.rejects(
+            async () => {
+                await ensureApiClientAuth({});
+            },
+            {
+                name: "Error",
+                message:
+                    "Not authenticated. Please run the login_user tool first to authenticate via browser.",
+            },
+        );
+    });
+
+    it("throws when user token is expired and no client credentials exist", async () => {
+        const token: UserToken = {
+            accessToken: "expired-token",
+            region: "mypurecloud.com",
+            expiresAt: Date.now() - 3_600_000,
+        };
+        setUserToken(token);
+        await assert.rejects(
+            async () => {
+                await ensureApiClientAuth({});
+            },
+            {
+                name: "Error",
+                message:
+                    "User session expired. Please run the login_user tool to log in again.",
+            },
+        );
+        assert.equal(getUserToken(), undefined);
+    });
 });

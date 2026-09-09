@@ -74,8 +74,8 @@ function toQueueSummary(queue: platformClient.Models.Queue): QueueSummary {
 
 export interface ToolConfig {
     routingApi: RoutingApi;
-    clientId: string;
-    clientSecret: string;
+    clientId?: string;
+    clientSecret?: string;
 }
 
 const inputSchema = {

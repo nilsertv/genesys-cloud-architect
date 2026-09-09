@@ -1,6 +1,10 @@
 import { spawn } from "node:child_process";
 import { z } from "zod/v3";
-import { buildRunnerEnv, type RunnerAuthConfig } from "./runner-env.ts";
+import {
+    buildRunnerEnv,
+    checkRunnerAuth,
+    type RunnerAuthConfig,
+} from "./runner-env.ts";
 import type { ToolFactory } from "./types.ts";
 
 interface ReadRunnerLine {
@@ -123,6 +127,14 @@ export const readFlow: ToolFactory<ReadFlowConfig> = (toolConfig) => ({
                             : "Provide exactly one of flowId or flowName — neither was given.",
                     },
                 ],
+            };
+        }
+
+        const auth = checkRunnerAuth(toolConfig);
+        if (!auth.ok) {
+            return {
+                isError: true,
+                content: [{ type: "text", text: auth.error }],
             };
         }
 

@@ -2,7 +2,11 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod/v3";
-import { buildRunnerEnv, type RunnerAuthConfig } from "./runner-env.ts";
+import {
+    buildRunnerEnv,
+    checkRunnerAuth,
+    type RunnerAuthConfig,
+} from "./runner-env.ts";
 import type { ToolFactory } from "./types.ts";
 
 interface FlowDiffEntry {
@@ -214,6 +218,14 @@ export const updateFlow: ToolFactory<UpdateFlowConfig> = (toolConfig) => ({
                             : "Provide exactly one of flowId or flowName — neither was given.",
                     },
                 ],
+            };
+        }
+
+        const auth = checkRunnerAuth(toolConfig);
+        if (!auth.ok) {
+            return {
+                isError: true,
+                content: [{ type: "text", text: auth.error }],
             };
         }
 

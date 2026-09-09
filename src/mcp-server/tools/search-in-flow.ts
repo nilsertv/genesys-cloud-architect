@@ -10,8 +10,8 @@ import type { ToolFactory } from "./types.ts";
 
 export interface ToolConfig {
     architectApi: ArchitectApi;
-    clientId: string;
-    clientSecret: string;
+    clientId?: string;
+    clientSecret?: string;
 }
 
 /** Caps the response size; matched actions beyond this are counted but not returned. */
