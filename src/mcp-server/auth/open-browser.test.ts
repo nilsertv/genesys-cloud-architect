@@ -3,12 +3,15 @@ import { describe, it } from "node:test";
 import { buildOpenInvocation } from "./open-browser.ts";
 
 describe("buildOpenInvocation", () => {
-    it("builds the win32 start invocation", () => {
+    it("builds the win32 rundll32 invocation", () => {
         assert.deepEqual(
             buildOpenInvocation("http://127.0.0.1:8917/callback", "win32"),
             {
-                command: "cmd",
-                args: ["/c", "start", "", "http://127.0.0.1:8917/callback"],
+                command: "rundll32",
+                args: [
+                    "url.dll,FileProtocolHandler",
+                    "http://127.0.0.1:8917/callback",
+                ],
             },
         );
     });
@@ -48,8 +51,8 @@ describe("buildOpenInvocation", () => {
             args: [url],
         });
         assert.deepEqual(buildOpenInvocation(url, "win32"), {
-            command: "cmd",
-            args: ["/c", "start", "", url],
+            command: "rundll32",
+            args: ["url.dll,FileProtocolHandler", url],
         });
     });
 });

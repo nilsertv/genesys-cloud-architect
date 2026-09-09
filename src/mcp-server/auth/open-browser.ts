@@ -15,10 +15,14 @@ export function buildOpenInvocation(
     platform: NodeJS.Platform = process.platform,
 ): { command: string; args: string[] } {
     if (platform === "win32") {
-        // `start` is a cmd.exe built-in, not a standalone binary — invoke it
-        // via `cmd /c`. The empty "" arg is `start`'s window-title
-        // parameter, required so the URL isn't mistaken for one.
-        return { command: "cmd", args: ["/c", "start", "", url] };
+        // rundll32's FileProtocolHandler opens a URL without going through
+        // cmd.exe's own argument parser at all, unlike `cmd /c start`,
+        // whose parser re-interprets &/|/^ in its arguments independently
+        // of how execFile passed them.
+        return {
+            command: "rundll32",
+            args: ["url.dll,FileProtocolHandler", url],
+        };
     }
     return {
         command: platform === "darwin" ? "open" : "xdg-open",
