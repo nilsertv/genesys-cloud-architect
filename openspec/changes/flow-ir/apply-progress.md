@@ -426,9 +426,23 @@ gentle-ai sdd-attempt reset --cwd /home/ubuntu/00-dev-apps/genesys-cloud-archite
   --actor "<actor>"
 ```
 
+## Phase 3: `raw-action-lookup.ts` + Wiring + Cleanup (tasks 3.1–3.15)
+
+### PR3 continuation — tasks 3.1–3.4 (Chunk 1)
+
+Tasks 3.1–3.4 implemented and green (84/84 tests passing):
+- `findRawActions(configuration, actionIds)` built on `enumerateRawActions()`.
+- Suffix stripping for `<actionId>::<outputId>` synthetic IDs.
+- Deduplication of distinct requested GUIDs, returning `found` and `notFound` covering every requested GUID exactly once.
+- Tolerant against malformed/null/absent configurations (never throws).
+- Unit tests added in `src/mcp-server/tools/raw-action-lookup.test.ts`.
+
 ## Next
 
-1. Phase 3 (PR3, tasks 3.1–3.15): `raw-action-lookup.ts` (`findRawActions`, `searchRawActions`) + tool import swaps.
+1. Phase 3 Chunk 2 (tasks 3.5–3.9): `searchRawActions` (literal, regex, case-sensitivity, maxMatchesPerAction truncation, hasMatches:false vs unsearchable).
+2. Phase 3 Chunk 3 (tasks 3.10–3.13): Swap imports in `flow-ir.ts`, `flow-action.ts`, `search-in-flow.ts`.
+3. Phase 3 Chunk 4 (tasks 3.14–3.15): Full test verification and end-to-end tool check.
+
 
 
 

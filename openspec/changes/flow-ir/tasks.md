@@ -58,10 +58,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: `raw-action-lookup.ts` + Wiring + Cleanup (PR 3, base = PR2 branch)
 
-- [ ] 3.1 RED — `raw-action-lookup.test.ts`: `findRawActions` returns found/notFound covering every requested id exactly once; malformed configuration never throws (spec: findRawActions Lookup, Not-found ids).
-- [ ] 3.2 GREEN — `raw-action-lookup.ts`: `findRawActions(configuration, actionIds)` built on `enumerateRawActions()` imported from `flow-ir-parser.ts`.
-- [ ] 3.3 RED — test: a `<actionId>::<outputId>` suffixed id resolves to the underlying action (spec: Synthetic suffixed id resolved); a batch mixing found/not-found/suffixed ids accounts for every distinct GUID exactly once (spec: Mixed batch).
-- [ ] 3.4 GREEN — suffix-stripping in `findRawActions` per design (`flow-action.ts`'s `planLookups` already strips before calling; confirm `findRawActions` itself also tolerates a suffixed id defensively per spec).
+- [x] 3.1 RED — `raw-action-lookup.test.ts`: `findRawActions` returns found/notFound covering every requested id exactly once; malformed configuration never throws (spec: findRawActions Lookup, Not-found ids).
+- [x] 3.2 GREEN — `raw-action-lookup.ts`: `findRawActions(configuration, actionIds)` built on `enumerateRawActions()` imported from `flow-ir-parser.ts`.
+- [x] 3.3 RED — test: a `<actionId>::<outputId>` suffixed id resolves to the underlying action (spec: Synthetic suffixed id resolved); a batch mixing found/not-found/suffixed ids accounts for every distinct GUID exactly once (spec: Mixed batch).
+- [x] 3.4 GREEN — suffix-stripping in `findRawActions` per design (`flow-action.ts`'s `planLookups` already strips before calling; confirm `findRawActions` itself also tolerates a suffixed id defensively per spec).
 - [ ] 3.5 RED — `searchRawActions` tests: literal substring match, regex match, case sensitivity (both `true`/`false`), object keys never match (spec: searchRawActions Content Search scenarios).
 - [ ] 3.6 GREEN — `searchRawActions(configuration, query, opts)`: string-leaf-only recursive walk, naive unescaped `parent.key`/`parent.index` path building, literal/regex/case-fold matching.
 - [ ] 3.7 RED — tests: `maxMatchesPerAction` truncation sets `truncated:true`; zero-matches on a well-formed configuration returns `hasMatches:false` distinct from an error on an unsearchable configuration (spec: maxMatchesPerAction truncation, Zero matches vs. unsearchable configuration).
