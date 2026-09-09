@@ -300,3 +300,86 @@ describe("parseFlow — generic outputs probe, DISABLED_BRANCH, DROPPED_EDGE (st
         }
     });
 });
+
+describe("parseFlow — UNKNOWN_ACTION_TYPE and terminal rules (steps 3e and 4)", () => {
+    it("handles zero-output actions: emits UNKNOWN_ACTION_TYPE unless in TERMINAL_ACTION_TYPES", () => {
+        const unknownRes = parseFlow(
+            loadFixture("warnings/unknown-action-type.json"),
+        );
+        assert.equal(unknownRes.ok, true);
+        if (unknownRes.ok) {
+            assert.equal(
+                unknownRes.warnings.find(
+                    (w) => w.code === "UNKNOWN_ACTION_TYPE",
+                )?.nodeId,
+                "mystery-1",
+            );
+            const node = unknownRes.ir.nodes.find((n) => n.id === "mystery-1");
+            assert.equal(node?.kind, "action");
+            assert.equal(node?.terminal, true);
+        }
+
+        const terminalRes = parseFlow({
+            name: "F",
+            type: "inboundcall",
+            flowSequenceItemList: [
+                {
+                    id: "t1",
+                    name: "T1",
+                    actionList: [
+                        { id: "end", type: "DisconnectAction", name: "End" },
+                    ],
+                },
+            ],
+        });
+        assert.equal(terminalRes.ok, true);
+        if (terminalRes.ok) {
+            assert.ok(
+                !terminalRes.warnings.some(
+                    (w) => w.code === "UNKNOWN_ACTION_TYPE",
+                ),
+            );
+            assert.equal(
+                terminalRes.ir.nodes.find((n) => n.id === "end")?.terminal,
+                true,
+            );
+        }
+    });
+
+    it("marks branch-output terminal based on TERMINAL_BRANCH_OUTCOMES", () => {
+        const res = parseFlow({
+            name: "F",
+            type: "inboundcall",
+            flowSequenceItemList: [
+                {
+                    id: "t1",
+                    name: "T1",
+                    actionList: [
+                        {
+                            id: "transfer-1",
+                            type: "TransferToAcdAction",
+                            name: "Transfer",
+                            paths: [
+                                { outputId: "out-success", name: "Success" },
+                                { outputId: "out-failure", name: "Failure" },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        });
+        assert.equal(res.ok, true);
+        if (res.ok) {
+            assert.equal(
+                res.ir.nodes.find((n) => n.id === "transfer-1::out-success")
+                    ?.terminal,
+                true,
+            );
+            assert.equal(
+                res.ir.nodes.find((n) => n.id === "transfer-1::out-failure")
+                    ?.terminal,
+                false,
+            );
+        }
+    });
+});

@@ -81,7 +81,33 @@ export const INTENT_FANOUT_ACTION_TYPES: ReadonlySet<string> = new Set([
     "AskForNLUIntentAction",
 ]);
 
+/**
+ * Action types considered naturally terminal (step 3e).
+ * An action of one of these types with zero discovered outputs is marked
+ * `terminal: true` without emitting `UNKNOWN_ACTION_TYPE`.
+ */
+export const TERMINAL_ACTION_TYPES: ReadonlySet<string> = new Set([
+    "DisconnectAction",
+    "ExitBotFlowAction",
+    "EndWorkflowAction",
+    "WaitForInputAction",
+]);
+
+/**
+ * (parentActionType, outcomeLabel) pairs whose zero-successor branch outputs
+ * are legitimately terminal (step 4).
+ */
+export const TERMINAL_BRANCH_OUTCOMES: ReadonlySet<string> = new Set([
+    "TransferToAcdAction::Success",
+    "TransferToNumberAction::Success",
+    "TransferToUserAction::Success",
+    "TransferToFlowAction::Success",
+    "TransferToSecureFlowAction::Success",
+    "TransferToVoicemailAction::Success",
+]);
+
 /** Probes target action or task id from an output or action entry (step 3d). */
+
 function probeTarget(raw: Record<string, unknown>): string | undefined {
     const t =
         raw.nextActionId ??
@@ -477,7 +503,20 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
             }
         }
 
-        // 3e (terminal/unknown-type fallback): lands in task 2.14.
+        // 3e. Zero discovered outputs: terminal allowlist or UNKNOWN_ACTION_TYPE.
+        if (discoveredOutputsCount === 0) {
+            node.terminal = true;
+            if (
+                node.actionType === undefined ||
+                !TERMINAL_ACTION_TYPES.has(node.actionType)
+            ) {
+                warnings.push({
+                    code: "UNKNOWN_ACTION_TYPE",
+                    message: `Action "${actionId}" (${node.actionType ?? "unknown type"}) has zero discovered outputs and is not recognized as a known terminal action.`,
+                    nodeId: actionId,
+                });
+            }
+        }
     }
 
     // 3b. Menu-choice expansion: one branch-output child of the task's
@@ -530,6 +569,28 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
             addEdge(startActionId, branchId, label);
             addEdge(branchId, targetActionId);
         });
+    }
+
+    // 4. terminal for branch-output nodes: true only when it has zero
+    // successors AND its (parentActionType, outcomeLabel) pair is in
+    // TERMINAL_BRANCH_OUTCOMES.
+    for (const n of nodesById.values()) {
+        if (n.kind !== "branch-output") {
+            continue;
+        }
+        if (n.successors.length === 0) {
+            const parentEdge = n.predecessors[0];
+            const parentNode = parentEdge
+                ? nodesById.get(parentEdge.id)
+                : undefined;
+            const parentType = parentNode?.actionType;
+            const outcome = n.label;
+            const key =
+                parentType && outcome ? `${parentType}::${outcome}` : undefined;
+            n.terminal = key !== undefined && TERMINAL_BRANCH_OUTCOMES.has(key);
+        } else {
+            n.terminal = false;
+        }
     }
 
     return {

@@ -377,11 +377,19 @@ Tasks 2.11–2.12 implemented and green (71/71 tests passing):
 - `DISABLED_BRANCH` emission for disabled branch outputs while keeping edges in graph.
 - Synthetic fixtures added: `disabled-branch.json`, `dropped-edge.json`.
 
+## PR2 continuation — tasks 2.13–2.14 (Chunk 2)
+
+Tasks 2.13–2.14 implemented and green (73/73 tests passing):
+- `TERMINAL_ACTION_TYPES` allowlist and step 3e zero-output terminal/`UNKNOWN_ACTION_TYPE` fallback.
+- `TERMINAL_BRANCH_OUTCOMES` allowlist and step 4 branch-output terminal assignment.
+- Synthetic fixture added: `warnings/unknown-action-type.json`.
+
 ## Next
 
-1. Continue with PR2 Chunk 2 (tasks 2.13–2.14): `TERMINAL_ACTION_TYPES`, `UNKNOWN_ACTION_TYPE`, and `TERMINAL_BRANCH_OUTCOMES`.
-2. Tasks 2.15–2.18: `initialSequence` resolution (`UNRESOLVED_INITIAL_SEQUENCE`, `entryTaskId`), and iterative DFS pass (order, reachable, backEdge).
-3. Tasks 2.19–2.21: `UNRESOLVED_CALL_TASK` reserved scenario + real fixture contract test.
+1. Continue with PR2 Chunk 3 (tasks 2.15–2.16): `initialSequence` resolution (`UNRESOLVED_INITIAL_SEQUENCE`, `entryTaskId`).
+2. Chunk 4 (tasks 2.17–2.18): iterative DFS pass (`order`, `reachable`, `backEdge`).
+3. Chunk 5 (tasks 2.19–2.21): `UNRESOLVED_CALL_TASK` reserved scenario + real fixture contract test.
 4. PR3: `raw-action-lookup.ts` + tool import swaps.
+
 
 
