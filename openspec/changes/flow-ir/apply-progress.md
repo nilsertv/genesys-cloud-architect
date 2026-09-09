@@ -410,9 +410,26 @@ Tasks 2.19–2.21 implemented and green (80/80 tests passing):
 - End-to-end trace from entry `task-start` node through branch-output to terminal node verified.
 - All 80 unit tests passing under `pnpm test`. Phase 2 is fully complete.
 
+### PR2 runtime harness settlement (Generation 5) — maintainer reset needed
+
+Tasks 2.11–2.21 are complete, committed across 5 separate small commits (`0d5e3f6`, `c885eb6`, `702f8b2`, `7732196`, `f5de2bc`), and 80/80 tests are green.
+`gentle-ai sdd-attempt settle` passed with `changed_line_budget_exceeded: true` (921 changed lines across the 5 chunks vs 400 budget for generation 5).
+
+Per `gentle-ai sdd-attempt status`, unblocking requires a maintainer to run:
+
+```bash
+gentle-ai sdd-attempt reset --cwd /home/ubuntu/00-dev-apps/genesys-cloud-architect \
+  --change flow-ir \
+  --expected-revision sha256:4189c088dc47668d945e51ecf86a0f0e4ea07ec010be6b06b6d1bcc6dd8f2d2f \
+  --request-id "<unique-request-id>" \
+  --reason "PR2 complete (tasks 2.11-2.21 done across 5 small commits; 80/80 pnpm test green); advance to Phase 3" \
+  --actor "<actor>"
+```
+
 ## Next
 
 1. Phase 3 (PR3, tasks 3.1–3.15): `raw-action-lookup.ts` (`findRawActions`, `searchRawActions`) + tool import swaps.
+
 
 
 
