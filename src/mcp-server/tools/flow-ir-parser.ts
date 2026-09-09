@@ -81,6 +81,21 @@ export const INTENT_FANOUT_ACTION_TYPES: ReadonlySet<string> = new Set([
     "AskForNLUIntentAction",
 ]);
 
+/** Probes target action or task id from an output or action entry (step 3d). */
+function probeTarget(raw: Record<string, unknown>): string | undefined {
+    const t =
+        raw.nextActionId ??
+        raw.nextAction ??
+        raw.targetActionId ??
+        raw.actionId ??
+        raw.targetTaskId ??
+        raw.taskId ??
+        raw.target;
+    if (typeof t === "string") return t;
+    if (isRecord(t) && typeof t.id === "string") return t.id;
+    return undefined;
+}
+
 /**
  * Task-reference field on a task-jump action (step 3a). Unconfirmed real key
  * — probed defensively per design.md.
@@ -318,10 +333,52 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
         }
     }
 
-    // Wiring, per action, in design.md's documented order (steps 3a/3c —
-    // generic outputs probe and terminal/unknown-type fallback land in later
-    // tasks). Menu-choice actions (step 3b) are excluded here and wired
-    // exclusively in the pass below.
+    function wireTarget(fromId: string, target: string): void {
+        if (nodesById.has(target)) {
+            addEdge(fromId, target);
+        } else if (taskIds.has(target)) {
+            addEdge(fromId, `${target}::start`);
+        } else {
+            warnings.push({
+                code: "DROPPED_EDGE",
+                message: `Wiring target "${target}" from "${fromId}" resolves to neither a known action nor a known task.`,
+                nodeId: fromId,
+            });
+        }
+    }
+
+    function addBranchOutput(
+        id: string,
+        label: string,
+        taskId: string,
+        taskName: string,
+    ): void {
+        nodesById.set(id, {
+            id,
+            kind: "branch-output",
+            label,
+            predecessors: [],
+            successors: [],
+            order: 0,
+            taskId,
+            taskName,
+            reachable: false,
+            terminal: false,
+        });
+    }
+
+    // Wire each task's task-start node to its startAction (if present).
+    for (const item of items) {
+        const taskId = typeof item.id === "string" ? item.id : "";
+        const startActionId = probeStartActionId(item);
+        if (startActionId !== undefined) {
+            wireTarget(`${taskId}::start`, startActionId);
+        }
+    }
+
+    // Wiring, per action, in design.md's documented order (steps 3a/3c/3d/3e).
+    // Menu-choice actions (step 3b) are excluded here and wired exclusively
+    // in the pass below.
     for (const [actionId, node] of nodesById) {
         if (node.kind !== "action" || startActionIds.has(actionId)) {
             continue;
@@ -357,10 +414,70 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
                 nodeId: actionId,
             });
             reachabilityIsComplete = false;
+            continue;
         }
 
-        // 3d/3e (generic outputs probe, terminal/unknown-type fallback):
-        // not yet implemented (design.md steps land in later tasks).
+        // 3d. Generic outputs probe (base rule, everything else).
+        const rawPaths = Array.isArray(raw.paths)
+            ? raw.paths
+            : Array.isArray(raw.outputs)
+              ? raw.outputs
+              : undefined;
+
+        let discoveredOutputsCount = 0;
+
+        if (rawPaths !== undefined) {
+            discoveredOutputsCount += rawPaths.length;
+            for (const output of rawPaths) {
+                if (!isRecord(output)) {
+                    continue;
+                }
+                const outputId =
+                    typeof output.outputId === "string"
+                        ? output.outputId
+                        : typeof output.id === "string"
+                          ? output.id
+                          : undefined;
+                const outcomeLabel =
+                    typeof output.name === "string"
+                        ? output.name
+                        : typeof output.label === "string"
+                          ? output.label
+                          : outputId;
+
+                if (outputId !== undefined) {
+                    const branchId = `${actionId}::${outputId}`;
+                    addBranchOutput(
+                        branchId,
+                        outcomeLabel ?? branchId,
+                        node.taskId,
+                        node.taskName,
+                    );
+                    addEdge(actionId, branchId, outcomeLabel);
+
+                    if (output.disabled === true || output.enabled === false) {
+                        warnings.push({
+                            code: "DISABLED_BRANCH",
+                            message: `Branch output "${branchId}" is disabled in the configuration.`,
+                            nodeId: branchId,
+                        });
+                    }
+
+                    const target = probeTarget(output);
+                    if (target !== undefined) {
+                        wireTarget(branchId, target);
+                    }
+                }
+            }
+        } else {
+            const fallThroughTarget = probeTarget(raw);
+            if (fallThroughTarget !== undefined) {
+                discoveredOutputsCount += 1;
+                wireTarget(actionId, fallThroughTarget);
+            }
+        }
+
+        // 3e (terminal/unknown-type fallback): lands in task 2.14.
     }
 
     // 3b. Menu-choice expansion: one branch-output child of the task's
@@ -404,18 +521,12 @@ export function parseFlow(configuration: unknown): ParseFlowResult {
                     : typeof choice.digit === "string"
                       ? choice.digit
                       : undefined;
-            nodesById.set(branchId, {
-                id: branchId,
-                kind: "branch-output",
-                label: label ?? branchId,
-                predecessors: [],
-                successors: [],
-                order: 0,
-                taskId: startNode.taskId,
-                taskName: startNode.taskName,
-                reachable: false,
-                terminal: false,
-            });
+            addBranchOutput(
+                branchId,
+                label ?? branchId,
+                startNode.taskId,
+                startNode.taskName,
+            );
             addEdge(startActionId, branchId, label);
             addEdge(branchId, targetActionId);
         });

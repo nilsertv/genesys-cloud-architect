@@ -1,0 +1,36 @@
+{
+    "name": "DisabledBranchTest",
+    "type": "inboundcall",
+    "flowSequenceItemList": [
+        {
+            "id": "task-1",
+            "name": "Task One",
+            "startAction": "decision-1",
+            "actionList": [
+                {
+                    "id": "decision-1",
+                    "type": "DecisionAction",
+                    "name": "Check Flag",
+                    "paths": [
+                        {
+                            "outputId": "yes",
+                            "name": "Yes",
+                            "disabled": true,
+                            "nextActionId": "action-target"
+                        },
+                        {
+                            "outputId": "no",
+                            "name": "No",
+                            "nextActionId": "action-target"
+                        }
+                    ]
+                },
+                {
+                    "id": "action-target",
+                    "type": "DisconnectAction",
+                    "name": "End Call"
+                }
+            ]
+        }
+    ]
+}

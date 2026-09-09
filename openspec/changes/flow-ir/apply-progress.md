@@ -369,15 +369,19 @@ fixtures committed. No further PR2 code (tasks 2.11 onward) was attempted
 after this block, per this session's instruction to stop on a blocked
 settle rather than resetting unilaterally.
 
+## PR2 continuation — tasks 2.11–2.12 (Chunk 1)
+
+Tasks 2.11–2.12 implemented and green (71/71 tests passing):
+- Generic outputs probe (`raw.paths ?? raw.outputs`, else `raw.nextAction ?? raw.nextActionId` fall-through).
+- `wireTarget` helper resolving targets to actions or `<taskId>::start`, emitting `DROPPED_EDGE` on failure.
+- `DISABLED_BRANCH` emission for disabled branch outputs while keeping edges in graph.
+- Synthetic fixtures added: `disabled-branch.json`, `dropped-edge.json`.
+
 ## Next
 
-1. A maintainer runs the `gentle-ai sdd-attempt reset` command above.
-2. Continue with PR2 tasks 2.11–2.21: generic outputs probe
-   (`DISABLED_BRANCH`/`DROPPED_EDGE`), `TERMINAL_ACTION_TYPES`/
-   `TERMINAL_BRANCH_OUTCOMES` + `UNKNOWN_ACTION_TYPE` fallback,
-   `initialSequence` resolution, the DFS order/reachable/backEdge pass, the
-   `UNRESOLVED_CALL_TASK`-reserved test, and the real-fixture
-   "well-formed but empty" contract test (task 2.20's already-flagged
-   deviation from its literal wording — see PR1's task 1.3 finding above).
-2. PR3 (tasks 3.1–3.15: `raw-action-lookup.ts` + import-path swap + cleanup
-   + full verification) remains entirely unstarted, based on PR2.
+1. Continue with PR2 Chunk 2 (tasks 2.13–2.14): `TERMINAL_ACTION_TYPES`, `UNKNOWN_ACTION_TYPE`, and `TERMINAL_BRANCH_OUTCOMES`.
+2. Tasks 2.15–2.18: `initialSequence` resolution (`UNRESOLVED_INITIAL_SEQUENCE`, `entryTaskId`), and iterative DFS pass (order, reachable, backEdge).
+3. Tasks 2.19–2.21: `UNRESOLVED_CALL_TASK` reserved scenario + real fixture contract test.
+4. PR3: `raw-action-lookup.ts` + tool import swaps.
+
+

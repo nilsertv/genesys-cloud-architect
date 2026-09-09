@@ -44,8 +44,8 @@ Chain strategy: stacked-to-main
 - [x] 2.8 GREEN — menu-choice expansion step per design step 3b.
 - [x] 2.9 RED — synthetic fixture `warnings/unresolved-intent-fanout.json`; test asserting `UNRESOLVED_INTENT_FANOUT` and `ir.reachabilityIsComplete === false`.
 - [x] 2.10 GREEN — `INTENT_FANOUT_ACTION_TYPES` seeded allowlist + intent-fan-out exclusion step (design step 3c).
-- [ ] 2.11 RED — synthetic fixtures `warnings/disabled-branch.json`, `warnings/dropped-edge.json`; tests asserting `DISABLED_BRANCH` (edges stay in graph) and `DROPPED_EDGE` (edge discarded) (spec: DISABLED_BRANCH, DROPPED_EDGE scenarios).
-- [ ] 2.12 GREEN — generic outputs probe (`raw.paths ?? raw.outputs`, else `raw.nextAction ?? raw.nextActionId` fall-through), `branch-output` node creation (`<actionId>::<outputId>`), `DISABLED_BRANCH`/`DROPPED_EDGE` emission (design step 3d).
+- [x] 2.11 RED — synthetic fixtures `warnings/disabled-branch.json`, `warnings/dropped-edge.json`; tests asserting `DISABLED_BRANCH` (edges stay in graph) and `DROPPED_EDGE` (edge discarded) (spec: DISABLED_BRANCH, DROPPED_EDGE scenarios).
+- [x] 2.12 GREEN — generic outputs probe (`raw.paths ?? raw.outputs`, else `raw.nextAction ?? raw.nextActionId` fall-through), `branch-output` node creation (`<actionId>::<outputId>`), `DISABLED_BRANCH`/`DROPPED_EDGE` emission (design step 3d).
 - [ ] 2.13 RED — synthetic fixture `warnings/unknown-action-type.json`; test asserting a generic node is still produced plus `UNKNOWN_ACTION_TYPE` (spec: UNKNOWN_ACTION_TYPE scenario).
 - [ ] 2.14 GREEN — `TERMINAL_ACTION_TYPES` seeded allowlist + zero-outputs terminal/`UNKNOWN_ACTION_TYPE` step (design step 3e) + `TERMINAL_BRANCH_OUTCOMES` terminal-branch-output rule (design step 4).
 - [ ] 2.15 RED — synthetic fixture `warnings/unresolved-initial-sequence.json`; test asserting `UNRESOLVED_INITIAL_SEQUENCE` and absent `ir.entryTaskId`.

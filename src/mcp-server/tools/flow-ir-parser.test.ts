@@ -227,3 +227,76 @@ describe("parseFlow — intent-fanout exclusion (step 3c)", () => {
         assert.deepEqual(node?.successors, []);
     });
 });
+
+describe("parseFlow — generic outputs probe, DISABLED_BRANCH, DROPPED_EDGE (step 3d)", () => {
+    it("emits DISABLED_BRANCH while keeping edges in graph", () => {
+        const result = parseFlow(loadFixture("warnings/disabled-branch.json"));
+        assert.equal(result.ok, true);
+        if (!result.ok) return;
+        const disabledWarn = result.warnings.find(
+            (w) => w.code === "DISABLED_BRANCH",
+        );
+        assert.equal(disabledWarn?.nodeId, "decision-1::yes");
+        assert.ok(
+            result.ir.nodes
+                .find((n) => n.id === "decision-1")
+                ?.successors.some((e) => e.id === "decision-1::yes"),
+        );
+        const branchNode = result.ir.nodes.find(
+            (n) => n.id === "decision-1::yes",
+        );
+        assert.equal(branchNode?.kind, "branch-output");
+        assert.ok(branchNode?.successors.some((e) => e.id === "action-target"));
+    });
+
+    it("emits DROPPED_EDGE on unresolvable target and wires fall-through directly", () => {
+        const droppedRes = parseFlow(loadFixture("warnings/dropped-edge.json"));
+        assert.equal(droppedRes.ok, true);
+        if (droppedRes.ok) {
+            assert.equal(
+                droppedRes.warnings.find((w) => w.code === "DROPPED_EDGE")
+                    ?.nodeId,
+                "action-1",
+            );
+            assert.deepEqual(
+                droppedRes.ir.nodes.find((n) => n.id === "action-1")
+                    ?.successors,
+                [],
+            );
+        }
+
+        const fallThroughRes = parseFlow({
+            name: "F",
+            type: "inboundcall",
+            flowSequenceItemList: [
+                {
+                    id: "t1",
+                    name: "T1",
+                    actionList: [
+                        {
+                            id: "a1",
+                            type: "PlayAudioAction",
+                            name: "Play",
+                            nextActionId: "a2",
+                        },
+                        { id: "a2", type: "DisconnectAction", name: "End" },
+                    ],
+                },
+            ],
+        });
+        assert.equal(fallThroughRes.ok, true);
+        if (fallThroughRes.ok) {
+            assert.deepEqual(
+                fallThroughRes.ir.nodes
+                    .find((n) => n.id === "a1")
+                    ?.successors.map((e) => e.id),
+                ["a2"],
+            );
+            assert.ok(
+                !fallThroughRes.ir.nodes.some(
+                    (n) => n.kind === "branch-output",
+                ),
+            );
+        }
+    });
+});
